@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Champ de formulaire compact, réutilisé dans les écrans d'édition
+     (fiche individu, événements...) pour éviter de répéter la même
+     liste de classes Tailwind partout. */
+  .field {
+    @apply w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-accent-500 dark:border-neutral-700 dark:bg-neutral-900;
+  }
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Scrollbars discrètes, dans l'esprit Notion/Linear */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.35); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
