@@ -52,34 +52,64 @@ function linkClasses({ isActive }) {
   ].join(' ');
 }
 
-export default function Sidebar() {
+export default function Sidebar({ open = false, onClose = () => {} }) {
   const sections = useSections();
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-neutral-200 bg-neutral-50/60 dark:border-neutral-800 dark:bg-neutral-900/60">
-      <div className="flex items-center gap-2 px-5 py-5">
-        <span className="text-xl">🌿</span>
-        <span className="text-sm font-semibold tracking-tight">Arbre & Mémoire</span>
-      </div>
+    <>
+      {/* Fond semi-transparent derrière le tiroir mobile : un clic referme le menu.
+          Invisible et non-interactif en desktop (où la sidebar est toujours visible). */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
-        {sections.map((section, idx) => (
-          <div key={section.label || `section-${idx}`}>
-            {section.label && (
-              <div className="mb-1.5 px-3 text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-                {section.label}
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink key={item.to} to={item.to} className={linkClasses}>
-                  <span className="text-base leading-none">{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
+      <aside
+        className={[
+          'fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-neutral-200',
+          'bg-neutral-50 transition-transform duration-200 dark:border-neutral-800 dark:bg-neutral-900',
+          'md:static md:z-auto md:translate-x-0 md:bg-neutral-50/60 md:dark:bg-neutral-900/60',
+          open ? 'translate-x-0' : '-translate-x-full',
+        ].join(' ')}
+      >
+        <div className="flex items-center justify-between gap-2 px-5 py-5">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🌿</span>
+            <span className="text-sm font-semibold tracking-tight">Arbre & Mémoire</span>
           </div>
-        ))}
-      </nav>
-    </aside>
+          {/* Bouton de fermeture : uniquement utile sur le tiroir mobile. */}
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800 md:hidden"
+            aria-label="Fermer le menu"
+            title="Fermer"
+          >
+            ✕
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
+          {sections.map((section, idx) => (
+            <div key={section.label || `section-${idx}`}>
+              {section.label && (
+                <div className="mb-1.5 px-3 text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                  {section.label}
+                </div>
+              )}
+              <div className="space-y-0.5">
+                {section.items.map((item) => (
+                  <NavLink key={item.to} to={item.to} className={linkClasses} onClick={onClose}>
+                    <span className="text-base leading-none">{item.icon}</span>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }
