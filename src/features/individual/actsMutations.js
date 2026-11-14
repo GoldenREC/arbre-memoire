@@ -9,7 +9,7 @@
 import { supabase } from '../../lib/supabaseClient.js';
 import { createSource } from '../sources/sourcesMutations.js';
 import { uploadMediaFile } from '../../lib/db/mediaStorage.js';
-import { addCitation } from './individualMutations.js';
+import { addCitation, ensureEvent, updateEventProofLevel } from './individualMutations.js';
 
 /** Actes (médias) déjà rattachés à un événement, via les citations qui le citent. */
 export async function listActsForEvent(eventId) {
@@ -63,4 +63,28 @@ export async function attachExistingSource(treeId, { eventId, individualId = nul
 export async function detachCitation(citationId) {
   const { error } = await supabase.from('citations').delete().eq('id', citationId);
   if (error) throw error;
+}
+
+/**
+ * Enregistre la preuve d'une date exacte (naissance/décès) saisie
+ * directement depuis le formulaire de fiche (création ou édition),
+ * via DateProofInput. `proof` est { type: 'acte'|'family', url, file }.
+ * Crée (ou retrouve) l'événement concerné, la source — classée "Acte"
+ * (civil_record) ou "Donnée familiale" (family_data) — y attache le
+ * fichier envoyé le cas échéant, cite l'événement, puis ajuste
+ * l'indice de preuve en conséquence : un acte avec scan est considéré
+ * prouvé par original, un acte avec seul permalien en source
+ * secondaire, une donnée familiale reste au niveau "probable".
+ */
+export async function attachDateProof(treeId, { subjectKind = 'individual', subjectId, individualId, eventType, snapshot, title, proof }) {
+  const eventId = await ensureEvent(treeId, subjectKind, subjectId, eventType, snapshot);
+  const sourceType = proof.type === 'family' ? 'family_data' : 'civil_record';
+  const sourceId = await createSource(treeId, { title, sourceType, url: proof.url?.trim() || null });
+  if (proof.file) {
+    await uploadMediaFile(treeId, proof.file, { mediaType: 'document', sourceId, title: proof.file.name, folder: 'actes' });
+  }
+  await addCitation(treeId, { eventId, individualId, sourceId });
+  const proofLevel = proof.type === 'family' ? 'probable' : proof.file ? 'proven_original' : 'proven_secondary';
+  await updateEventProofLevel(eventId, proofLevel);
+  return { eventId, sourceId };
 }

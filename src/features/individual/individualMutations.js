@@ -203,17 +203,17 @@ export async function createIndividualFull(treeId, input = {}) {
       last_name: lastName,
       sex: input.sex || 'U',
       birth_date: input.birthDate || null,
-      birth_date_precision: input.birthDate ? 'exact' : 'unknown',
+      birth_date_precision: input.birthDate ? input.birthDatePrecision || 'exact' : 'unknown',
       birth_place_id: birthPlaceId,
       is_deceased: !!input.isDeceased,
       death_date: input.isDeceased ? input.deathDate || null : null,
-      death_date_precision: input.isDeceased && input.deathDate ? 'exact' : 'unknown',
+      death_date_precision: input.isDeceased && input.deathDate ? input.deathDatePrecision || 'exact' : 'unknown',
       death_place_id: input.isDeceased ? deathPlaceId : null,
     })
     .select('id, first_names, last_name')
     .single();
   if (error) throw error;
-  return data;
+  return { ...data, birthPlaceId, deathPlaceId: input.isDeceased ? deathPlaceId : null };
 }
 
 // ---------------------------------------------------------------------

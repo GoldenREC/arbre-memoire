@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import DatePartsInput from '../../components/ui/DatePartsInput.jsx';
 import StructuredPlaceInput, { EMPTY_PLACE } from '../../components/ui/StructuredPlaceInput.jsx';
+import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
 import IndividualPicker from './IndividualPicker.jsx';
 import { toProperCase } from '../../lib/utils/properCase.js';
+import { PRECISION_OPTIONS } from '../../lib/utils/datePrecision.js';
 import { createIndividualFull, addParentLink, linkAsSibling } from './individualMutations.js';
+import { attachDateProof } from './actsMutations.js';
 import { pushErrorToast, pushToast } from '../../store/useToastStore.js';
 
 const RELATION_LABELS = (sex) => ({
@@ -37,8 +40,8 @@ async function applyRelation(treeId, newIndividualId, relation, existingPersonId
 
 const EMPTY_FORM = {
   firstNames: '', birthName: '', maritalLastName: '', sex: 'M',
-  birthDate: null, birthPlace: EMPTY_PLACE,
-  isDeceased: false, deathDate: null, deathPlace: EMPTY_PLACE,
+  birthDate: null, birthDatePrecision: 'exact', birthPlace: EMPTY_PLACE, birthProof: EMPTY_DATE_PROOF,
+  isDeceased: false, deathDate: null, deathDatePrecision: 'exact', deathPlace: EMPTY_PLACE, deathProof: EMPTY_DATE_PROOF,
 };
 
 /**
@@ -67,11 +70,43 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
     };
   }
 
+  const birthProofRequired = !!form.birthDate && form.birthDatePrecision === 'exact';
+  const deathProofRequired = form.isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact';
+
   async function handleSubmit(e) {
     e.preventDefault();
+    if (birthProofRequired && !isDateProofValid(form.birthProof)) {
+      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de naissance exacte.');
+      return;
+    }
+    if (deathProofRequired && !isDateProofValid(form.deathProof)) {
+      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de décès exacte.');
+      return;
+    }
     setSaving(true);
     try {
       const created = await createIndividualFull(treeId, form);
+      const personName = `${created.first_names || ''} ${created.last_name || ''}`.trim();
+      if (birthProofRequired) {
+        await attachDateProof(treeId, {
+          subjectId: created.id,
+          individualId: created.id,
+          eventType: 'birth',
+          snapshot: { date: form.birthDate, datePrecision: form.birthDatePrecision, placeId: created.birthPlaceId },
+          title: `Acte de naissance — ${personName}`,
+          proof: form.birthProof,
+        });
+      }
+      if (deathProofRequired) {
+        await attachDateProof(treeId, {
+          subjectId: created.id,
+          individualId: created.id,
+          eventType: 'death',
+          snapshot: { date: form.deathDate, datePrecision: form.deathDatePrecision, placeId: created.deathPlaceId },
+          title: `Acte de décès — ${personName}`,
+          proof: form.deathProof,
+        });
+      }
       if (linkEnabled && linkPerson) {
         await applyRelation(treeId, created.id, relation, linkPerson.id);
       }
@@ -104,13 +139,24 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
         <TextField label="Nom marital" value={form.maritalLastName} onChange={(v) => patch({ maritalLastName: v })} onBlur={normalizeOnBlur('maritalLastName')} />
       )}
 
-      <Field label="Date de naissance">
-        <DatePartsInput value={form.birthDate} onChange={(v) => patch({ birthDate: v })} />
-      </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Date de naissance">
+          <DatePartsInput value={form.birthDate} onChange={(v) => patch({ birthDate: v })} />
+        </Field>
+        <Field label="Précision (naissance)">
+          <select className="field" value={form.birthDatePrecision} onChange={(e) => patch({ birthDatePrecision: e.target.value })}>
+            {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </Field>
+      </div>
 
       <Field label="Lieu de naissance">
         <StructuredPlaceInput value={form.birthPlace} onChange={(v) => patch({ birthPlace: v })} />
       </Field>
+
+      {birthProofRequired && (
+        <DateProofInput value={form.birthProof} onChange={(v) => patch({ birthProof: v })} />
+      )}
 
       <RadioToggle
         label="Statut"
@@ -122,12 +168,22 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
 
       {form.isDeceased && (
         <>
-          <Field label="Date de décès">
-            <DatePartsInput value={form.deathDate} onChange={(v) => patch({ deathDate: v })} />
-          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Date de décès">
+              <DatePartsInput value={form.deathDate} onChange={(v) => patch({ deathDate: v })} />
+            </Field>
+            <Field label="Précision (décès)">
+              <select className="field" value={form.deathDatePrecision} onChange={(e) => patch({ deathDatePrecision: e.target.value })}>
+                {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </div>
           <Field label="Lieu de décès">
             <StructuredPlaceInput value={form.deathPlace} onChange={(v) => patch({ deathPlace: v })} />
           </Field>
+          {deathProofRequired && (
+            <DateProofInput value={form.deathProof} onChange={(v) => patch({ deathProof: v })} />
+          )}
         </>
       )}
 
@@ -164,7 +220,11 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
       </div>
 
       <div className="flex gap-2">
-        <button type="submit" disabled={saving} className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60">
+        <button
+          type="submit"
+          disabled={saving || (birthProofRequired && !isDateProofValid(form.birthProof)) || (deathProofRequired && !isDateProofValid(form.deathProof))}
+          className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+        >
           {saving ? 'Création…' : 'Créer la fiche'}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800">

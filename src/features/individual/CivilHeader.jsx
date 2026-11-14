@@ -3,21 +3,17 @@ import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import NmdBadges from './NmdBadges.jsx';
 import DatePartsInput from '../../components/ui/DatePartsInput.jsx';
 import StructuredPlaceInput, { EMPTY_PLACE } from '../../components/ui/StructuredPlaceInput.jsx';
+import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
 import { isPlaceEmpty } from '../../lib/utils/placeLabel.js';
+import { PRECISION_OPTIONS } from '../../lib/utils/datePrecision.js';
 import { fetchStructuredPlace } from './individualMutations.js';
+import { attachDateProof } from './actsMutations.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const SEX_OPTIONS = [
   { value: 'M', label: 'Masculin' },
   { value: 'F', label: 'Féminin' },
   { value: 'U', label: 'Non précisé' },
-];
-const PRECISION_OPTIONS = [
-  { value: 'exact', label: 'Exacte' },
-  { value: 'about', label: 'Vers' },
-  { value: 'before', label: 'Avant' },
-  { value: 'after', label: 'Après' },
-  { value: 'unknown', label: 'Inconnue' },
 ];
 
 function initials(individual) {
@@ -35,6 +31,16 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
   const [form, setForm] = useState(() => toFormState(individual, places));
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Une preuve n'est redemandée que si aucune citation n'est déjà
+  // rattachée à l'événement de naissance/décès — sinon on la
+  // redemanderait à chaque édition d'une fiche déjà sourcée.
+  const birthEvent = (events || []).find((e) => e.origin === 'individual' && e.eventType === 'birth') || null;
+  const deathEvent = (events || []).find((e) => e.origin === 'individual' && e.eventType === 'death') || null;
+  const hasBirthProof = !!birthEvent && (citations || []).some((c) => c.eventId === birthEvent.id);
+  const hasDeathProof = !!deathEvent && (citations || []).some((c) => c.eventId === deathEvent.id);
+  const birthProofRequired = !!form.birthDate && form.birthDatePrecision === 'exact' && !hasBirthProof;
+  const deathProofRequired = form.isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact' && !hasDeathProof;
 
   /**
    * Les lieux structurés (les 9 champs) ne sont chargés qu'à l'ouverture
@@ -61,6 +67,14 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
   }
 
   async function handleSave() {
+    if (birthProofRequired && !isDateProofValid(form.birthProof)) {
+      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de naissance exacte.');
+      return;
+    }
+    if (deathProofRequired && !isDateProofValid(form.deathProof)) {
+      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de décès exacte.');
+      return;
+    }
     setSaving(true);
     try {
       // Un lieu importé d'un GEDCOM ou saisi via l'ancien champ libre n'a
@@ -93,6 +107,30 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
         },
         placesPatch
       );
+
+      const personName = `${form.firstNames || ''} ${form.lastName || ''}`.trim();
+      if (birthProofRequired) {
+        await attachDateProof(treeId, {
+          subjectId: individual.id,
+          individualId: individual.id,
+          eventType: 'birth',
+          snapshot: { date: form.birthDate, datePrecision: form.birthDatePrecision, placeId: individual.birthPlaceId },
+          title: `Acte de naissance — ${personName}`,
+          proof: form.birthProof,
+        });
+      }
+      if (deathProofRequired) {
+        await attachDateProof(treeId, {
+          subjectId: individual.id,
+          individualId: individual.id,
+          eventType: 'death',
+          snapshot: { date: form.deathDate, datePrecision: form.deathDatePrecision, placeId: individual.deathPlaceId },
+          title: `Acte de décès — ${personName}`,
+          proof: form.deathProof,
+        });
+      }
+      if (birthProofRequired || deathProofRequired) onActsChanged?.();
+
       setEditing(false);
       pushToast('Fiche enregistrée.');
     } catch (err) {
@@ -152,6 +190,10 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
             )}
           </BlockField>
 
+          {birthProofRequired && (
+            <DateProofInput value={form.birthProof} onChange={(v) => setForm((f) => ({ ...f, birthProof: v }))} disabled={loadingPlaces} />
+          )}
+
           <Field label="Décédé(e) ?">
             <input type="checkbox" checked={form.isDeceased} onChange={(e) => setForm((f) => ({ ...f, isDeceased: e.target.checked }))} />
           </Field>
@@ -180,12 +222,19 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
                   <StructuredPlaceInput value={form.deathPlace} onChange={(v) => setForm((f) => ({ ...f, deathPlace: v, deathPlaceTouched: true }))} />
                 )}
               </BlockField>
+              {deathProofRequired && (
+                <DateProofInput value={form.deathProof} onChange={(v) => setForm((f) => ({ ...f, deathProof: v }))} disabled={loadingPlaces} />
+              )}
             </>
           )}
         </div>
 
         <div className="mt-4 flex gap-2">
-          <button onClick={handleSave} disabled={saving} className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60">
+          <button
+            onClick={handleSave}
+            disabled={saving || (birthProofRequired && !isDateProofValid(form.birthProof)) || (deathProofRequired && !isDateProofValid(form.deathProof))}
+            className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+          >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
           <button onClick={() => setEditing(false)} className="rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800">
@@ -285,12 +334,14 @@ function toFormState(individual, places) {
     birthPlace: EMPTY_PLACE,
     birthPlaceLegacyLabel: individual.birthPlaceId ? places.get(individual.birthPlaceId) || '' : '',
     birthPlaceTouched: false,
+    birthProof: EMPTY_DATE_PROOF,
     isDeceased: !!individual.isDeceased,
     deathDate: individual.deathDate || '',
     deathDatePrecision: individual.deathDatePrecision || 'unknown',
     deathPlace: EMPTY_PLACE,
     deathPlaceLegacyLabel: individual.deathPlaceId ? places.get(individual.deathPlaceId) || '' : '',
     deathPlaceTouched: false,
+    deathProof: EMPTY_DATE_PROOF,
   };
 }
 
