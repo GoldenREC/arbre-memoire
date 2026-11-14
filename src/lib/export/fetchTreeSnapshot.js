@@ -111,6 +111,7 @@ export async function fetchTreeSnapshot(treeId) {
   const sources = (sourceRows || []).map((s) => ({
     id: s.id,
     title: s.title,
+    sourceType: s.source_type,
     repository: s.repository,
     callNumber: s.call_number,
     url: s.url,

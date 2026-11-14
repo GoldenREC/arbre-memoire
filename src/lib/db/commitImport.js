@@ -296,11 +296,33 @@ async function insertDerivedEvents(individuals, families, treeId, individualIdMa
   for (const fam of families) {
     const subjectId = unionIdMap.get(fam.localId);
     if (!subjectId) continue;
-    // Une union n'est pas forcément un mariage (en couple/concubinage...) —
-    // on ne crée un événement "marriage" que si le type résolu l'est
-    // vraiment (voir mapper.js:resolveUnionType) ; sinon, la même date
-    // décrit une "mise en couple" (événement distinct, event_type_enum).
-    if (fam.startDate || fam.placeLocalId) {
+    if (fam.splitMarriageMilestone) {
+      // Mise en couple et mariage sont deux jalons indépendants (voir
+      // unionMutations.js) : la mise en couple vient toujours de
+      // startDate/place, le mariage de ses propres champs dédiés
+      // (fam.marriageDate/marriagePlaceLocalId — voir mapper.js).
+      if (fam.startDate || fam.placeLocalId) {
+        rows.push({
+          tree_id: treeId, subject_kind: 'union', subject_id: subjectId,
+          event_type: 'union_start', event_date: fam.startDate ?? null,
+          date_precision: fam.startDatePrecision ?? 'unknown',
+          place_id: fam.placeLocalId ? placeIdMap.get(fam.placeLocalId) ?? null : null,
+        });
+      }
+      if (fam.marriageDate || fam.marriagePlaceLocalId) {
+        rows.push({
+          tree_id: treeId, subject_kind: 'union', subject_id: subjectId,
+          event_type: 'marriage', event_date: fam.marriageDate ?? null,
+          date_precision: fam.marriageDatePrecision ?? 'unknown',
+          place_id: fam.marriagePlaceLocalId ? placeIdMap.get(fam.marriagePlaceLocalId) ?? null : null,
+        });
+      }
+    } else if (fam.startDate || fam.placeLocalId) {
+      // Comportement historique (fichiers sans "marriage" dédié) : une
+      // union n'est pas forcément un mariage (en couple/concubinage...) —
+      // on ne crée un événement "marriage" que si le type résolu l'est
+      // vraiment (voir mapper.js:resolveUnionType) ; sinon, la même date
+      // décrit une "mise en couple" (événement distinct, event_type_enum).
       rows.push({
         tree_id: treeId, subject_kind: 'union', subject_id: subjectId,
         event_type: fam.unionType === 'marriage' ? 'marriage' : 'union_start',
@@ -313,6 +335,7 @@ async function insertDerivedEvents(individuals, families, treeId, individualIdMa
       rows.push({
         tree_id: treeId, subject_kind: 'union', subject_id: subjectId,
         event_type: 'divorce', event_date: fam.endDate, date_precision: fam.endDatePrecision ?? 'unknown',
+        place_id: fam.divorcePlaceLocalId ? placeIdMap.get(fam.divorcePlaceLocalId) ?? null : null,
       });
     }
   }

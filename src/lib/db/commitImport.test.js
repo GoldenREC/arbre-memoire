@@ -251,3 +251,71 @@ describe('commitImport — lieux structurés et unions génériques (import pers
     expect(result.placeIdMap).toBeInstanceOf(Map);
   });
 });
+
+describe('commitImport — jalons d\'union (mise en couple / mariage / divorce distincts)', () => {
+  beforeEach(() => {
+    mock = makeSupabaseMock({ individuals: [{ id: 'real-a' }, { id: 'real-b' }] });
+  });
+
+  it('avec splitMarriageMilestone, crée un événement "union_start" ET un événement "marriage" distincts, avec le bon lieu de divorce', async () => {
+    const { commitImport } = await import('./commitImport.js');
+    const model = {
+      treeId: 'tree-1', importBatchId: 'batch-1',
+      places: [
+        { localId: 'p-start', structured: { city: 'Donzenac' } },
+        { localId: 'p-marriage', structured: { city: 'Paris' } },
+        { localId: 'p-divorce', structured: { city: 'Lyon' } },
+      ],
+      sources: [],
+      individuals: [
+        { localId: 'a', existingId: 'real-a', firstNames: 'A' },
+        { localId: 'b', existingId: 'real-b', firstNames: 'B' },
+      ],
+      families: [{
+        localId: 'u1', partnerLocalIds: ['a', 'b'], unionType: 'marriage', status: 'divorced',
+        startDate: '1920-01-01', startDatePrecision: 'exact', placeLocalId: 'p-start',
+        endDate: '1948-06-07', endDatePrecision: 'exact',
+        splitMarriageMilestone: true,
+        marriageDate: '1930-05-05', marriageDatePrecision: 'exact', marriagePlaceLocalId: 'p-marriage',
+        divorcePlaceLocalId: 'p-divorce',
+      }],
+      filiations: [],
+    };
+
+    await commitImport(model);
+
+    const events = mock.inserted.events;
+    const unionStart = events.find((e) => e.event_type === 'union_start');
+    const marriage = events.find((e) => e.event_type === 'marriage');
+    const divorce = events.find((e) => e.event_type === 'divorce');
+
+    expect(unionStart).toMatchObject({ event_date: '1920-01-01', place_id: expect.any(String) });
+    expect(marriage).toMatchObject({ event_date: '1930-05-05', place_id: expect.any(String) });
+    expect(marriage.place_id).not.toBe(unionStart.place_id);
+    expect(divorce).toMatchObject({ event_date: '1948-06-07', place_id: expect.any(String) });
+    expect(divorce.place_id).not.toBe(marriage.place_id);
+  });
+
+  it('sans splitMarriageMilestone, conserve le comportement historique (un seul événement "marriage" pour startDate)', async () => {
+    const { commitImport } = await import('./commitImport.js');
+    const model = {
+      treeId: 'tree-1', importBatchId: 'batch-1',
+      places: [], sources: [],
+      individuals: [
+        { localId: 'a', existingId: 'real-a', firstNames: 'A' },
+        { localId: 'b', existingId: 'real-b', firstNames: 'B' },
+      ],
+      families: [{
+        localId: 'u1', partnerLocalIds: ['a', 'b'], unionType: 'marriage', status: 'ongoing',
+        startDate: '1958-07-19', startDatePrecision: 'exact',
+      }],
+      filiations: [],
+    };
+
+    await commitImport(model);
+
+    const events = mock.inserted.events;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ event_type: 'marriage', event_date: '1958-07-19' });
+  });
+});

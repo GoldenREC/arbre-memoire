@@ -224,4 +224,57 @@ describe('mapCustomImportToStagingModel', () => {
     });
     expect(model.proofs).toEqual([]);
   });
+
+  it("avec un jalon 'marriage' dédié, startDate reste la mise en couple (preuve en 'union_start') et marriage devient son propre événement", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{
+        localId: 'u1', partners: ['a', 'b'], unionType: 'marriage',
+        startDate: '1920-01-01', startDatePrecision: 'exact',
+        proof: { type: 'family', transcription: 'Vivent ensemble depuis 1920.' },
+        marriage: {
+          date: '1958-07-19', datePrecision: 'exact',
+          place: { city: 'Paris', country: 'France' },
+          proof: { type: 'acte', url: 'https://archives/mariage' },
+        },
+      }],
+    });
+    expect(model.families).toEqual([
+      expect.objectContaining({
+        localId: 'u1', startDate: '1920-01-01', marriageDate: '1958-07-19', marriageDatePrecision: 'exact',
+      }),
+    ]);
+    expect(model.families[0].marriagePlaceLocalId).toBeTruthy();
+    expect(model.proofs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ subjectKind: 'union', subjectLocalId: 'u1', eventType: 'union_start', proof: { type: 'family', transcription: 'Vivent ensemble depuis 1920.' } }),
+        expect.objectContaining({ subjectKind: 'union', subjectLocalId: 'u1', eventType: 'marriage', proof: { type: 'acte', url: 'https://archives/mariage' } }),
+      ])
+    );
+  });
+
+  it("sans jalon 'marriage' explicite, le comportement historique est inchangé (startDate = date de mariage pour unionType: 'marriage')", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], unionType: 'marriage', startDate: '1958-07-19', startDatePrecision: 'exact' }],
+    });
+    expect(model.families[0].splitMarriageMilestone).toBe(false);
+    expect(model.families[0].marriageDate).toBeNull();
+  });
+
+  it('transmet divorcePlace comme lieu structuré rattaché à la preuve de divorce', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{
+        localId: 'u1', partners: ['a', 'b'], status: 'divorced',
+        endDate: '1948-06-07', endDatePrecision: 'exact',
+        divorcePlace: { city: 'Paris', country: 'France' },
+        divorceProof: { type: 'family' },
+      }],
+    });
+    expect(model.families[0].divorcePlaceLocalId).toBeTruthy();
+    expect(model.proofs).toEqual([
+      expect.objectContaining({ eventType: 'divorce', snapshot: expect.objectContaining({ placeLocalId: model.families[0].divorcePlaceLocalId }) }),
+    ]);
+  });
 });

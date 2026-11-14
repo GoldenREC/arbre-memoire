@@ -27,6 +27,13 @@ function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+function validatePlaceOnly(place, label, errors) {
+  if (place === null || place === undefined) return;
+  if (!isPlainObject(place)) {
+    errors.push(`${label} : doit être un objet ou null.`);
+  }
+}
+
 function validateDateFacts(facts, label, errors, availableImagePaths) {
   if (facts === null || facts === undefined) return;
   if (!isPlainObject(facts)) {
@@ -168,12 +175,16 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
       errors,
       availableImagePaths
     );
+    if (u.marriage !== undefined && u.marriage !== null) {
+      validateDateFacts(u.marriage, `${label}.marriage`, errors, availableImagePaths);
+    }
     if (u.endDate !== undefined && u.endDate !== null && !ISO_DATE_RE.test(u.endDate)) {
       errors.push(`${label}.endDate : "${u.endDate}" n'est pas au format AAAA-MM-JJ.`);
     }
     if (u.endDatePrecision !== undefined && !DATE_PRECISION_VALUES.includes(u.endDatePrecision)) {
       errors.push(`${label}.endDatePrecision : "${u.endDatePrecision}" invalide (attendu : ${DATE_PRECISION_VALUES.join('|')}).`);
     }
+    validatePlaceOnly(u.divorcePlace, `${label}.divorcePlace`, errors);
     validateProof(u.divorceProof, `${label}.divorceProof`, errors, availableImagePaths);
   }
 

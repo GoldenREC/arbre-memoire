@@ -242,4 +242,51 @@ describe('validateCustomImport', () => {
     };
     expect(validateCustomImport(model)).toEqual([]);
   });
+
+  it('accepte un jalon "marriage" valide, distinct de la mise en couple', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{
+        localId: 'u1', partners: ['p1', 'p2'], unionType: 'marriage',
+        startDate: '1920-01-01', startDatePrecision: 'exact',
+        marriage: { date: '1958-07-19', datePrecision: 'exact', place: { city: 'Paris' } },
+      }],
+    };
+    expect(validateCustomImport(model)).toEqual([]);
+  });
+
+  it('refuse une datePrecision invalide dans "marriage"', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], marriage: { date: '1958-07-19', datePrecision: 'peut-etre' } }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('.marriage.datePrecision'))).toBe(true);
+  });
+
+  it('refuse une preuve "acte" sans url ni imageFile dans "marriage"', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], marriage: { date: '1958-07-19', proof: { type: 'acte' } } }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('.marriage.proof') && e.includes('nécessite "url" ou "imageFile"'))).toBe(true);
+  });
+
+  it('accepte divorcePlace comme objet structuré', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{
+        localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '1948-06-07',
+        divorcePlace: { city: 'Paris', country: 'France' },
+      }],
+    };
+    expect(validateCustomImport(model)).toEqual([]);
+  });
+
+  it('refuse divorcePlace qui ne serait pas un objet', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '1948-06-07', divorcePlace: 'Paris' }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('.divorcePlace'))).toBe(true);
+  });
 });

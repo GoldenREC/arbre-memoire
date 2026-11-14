@@ -85,15 +85,34 @@ function mapUnion(u, placesMap, proofs) {
   const placeLocalId = registerPlace(placesMap, u.place);
   const unionType = resolveUnionType(u);
   const isMarriage = unionType === 'marriage';
+  // `marriage` (optionnel) décrit le jalon mariage comme un événement à
+  // part, indépendant de la mise en couple — voir unionMutations.js côté
+  // site. Dès qu'il est présent, startDate/place ci-dessus ne représentent
+  // plus que la mise en couple, même pour une union de type "marriage"
+  // (sinon, comportement historique inchangé : startDate fait doublon de
+  // mariage pour rester compatible avec les fichiers déjà écrits).
+  const hasOwnMarriageMilestone = u.marriage !== undefined && u.marriage !== null;
+  const marriagePlaceLocalId = hasOwnMarriageMilestone ? registerPlace(placesMap, u.marriage.place) : null;
+  const divorcePlaceLocalId = registerPlace(placesMap, u.divorcePlace);
 
   if (u.proof) {
     proofs.push({
       subjectKind: 'union',
       subjectLocalId: u.localId,
-      eventType: isMarriage ? 'marriage' : 'union_start',
+      eventType: hasOwnMarriageMilestone ? 'union_start' : isMarriage ? 'marriage' : 'union_start',
       snapshot: { date: u.startDate || null, datePrecision: u.startDatePrecision || 'unknown', placeLocalId },
       proof: u.proof,
-      title: isMarriage ? 'Acte de mariage' : 'Mise en couple',
+      title: hasOwnMarriageMilestone || !isMarriage ? 'Mise en couple' : 'Acte de mariage',
+    });
+  }
+  if (hasOwnMarriageMilestone && u.marriage.proof) {
+    proofs.push({
+      subjectKind: 'union',
+      subjectLocalId: u.localId,
+      eventType: 'marriage',
+      snapshot: { date: u.marriage.date || null, datePrecision: u.marriage.datePrecision || 'unknown', placeLocalId: marriagePlaceLocalId },
+      proof: u.marriage.proof,
+      title: 'Acte de mariage',
     });
   }
   // Preuve distincte pour le divorce (jugement) — rattachée à l'événement
@@ -104,7 +123,7 @@ function mapUnion(u, placesMap, proofs) {
       subjectKind: 'union',
       subjectLocalId: u.localId,
       eventType: 'divorce',
-      snapshot: { date: u.endDate, datePrecision: u.endDatePrecision || 'unknown', placeLocalId: null },
+      snapshot: { date: u.endDate, datePrecision: u.endDatePrecision || 'unknown', placeLocalId: divorcePlaceLocalId },
       proof: u.divorceProof,
       title: 'Jugement de divorce',
     });
@@ -120,6 +139,11 @@ function mapUnion(u, placesMap, proofs) {
     placeLocalId,
     endDate: u.endDate || null,
     endDatePrecision: u.endDatePrecision || (u.endDate ? 'exact' : 'unknown'),
+    splitMarriageMilestone: hasOwnMarriageMilestone,
+    marriageDate: hasOwnMarriageMilestone ? u.marriage.date || null : null,
+    marriageDatePrecision: hasOwnMarriageMilestone ? u.marriage.datePrecision || (u.marriage.date ? 'exact' : 'unknown') : 'unknown',
+    marriagePlaceLocalId,
+    divorcePlaceLocalId,
   };
 }
 

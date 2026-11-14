@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { exportGedcom } from '../../lib/export/gedcomExporter.js';
 import { exportJsonBackup } from '../../lib/export/jsonExporter.js';
+import { exportCustomImportZip } from '../../lib/export/customFormatExporter.js';
 import { exportFamilyBooklet } from '../../lib/export/pdfBooklet.js';
 import { exportPedigreeChart } from '../../lib/export/pdfPedigree.js';
 import IndividualPicker from '../individual/IndividualPicker.jsx';
@@ -35,12 +36,25 @@ export default function ExportPanel() {
   const [pdfGenerations, setPdfGenerations] = useState(4);
   const [pdfMaskLiving, setPdfMaskLiving] = useState(true);
 
+  function successText(result) {
+    if (result && typeof result.imagesIncluded === 'number') {
+      const parts = [
+        `${result.individualCount} personne${result.individualCount > 1 ? 's' : ''}`,
+        `${result.unionCount} union${result.unionCount > 1 ? 's' : ''}`,
+      ];
+      if (result.imagesIncluded) parts.push(`${result.imagesIncluded} image${result.imagesIncluded > 1 ? 's' : ''} incluse${result.imagesIncluded > 1 ? 's' : ''}`);
+      if (result.imagesFailed) parts.push(`${result.imagesFailed} image${result.imagesFailed > 1 ? 's' : ''} non récupérée${result.imagesFailed > 1 ? 's' : ''}`);
+      return `Export terminé — ${parts.join(', ')}. Le téléchargement a démarré.`;
+    }
+    return 'Export terminé — le téléchargement a démarré.';
+  }
+
   async function run(key, fn) {
     setBusy(key);
     setMessage(null);
     try {
-      await fn();
-      setMessage({ type: 'ok', text: 'Export terminé — le téléchargement a démarré.' });
+      const result = await fn();
+      setMessage({ type: 'ok', text: successText(result) });
     } catch (err) {
       console.error(err);
       setMessage({ type: 'error', text: err.message || "L'export a échoué." });
@@ -118,6 +132,24 @@ export default function ExportPanel() {
           className="mt-3 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
         >
           {busy === 'json' ? 'Export en cours…' : jsonIncludeMedia ? 'Télécharger le .zip' : 'Télécharger le .json'}
+        </button>
+      </section>
+
+      {/* Format d'import personnalisé (arbre.json + images/) */}
+      <section className="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+        <h2 className="mb-1 text-sm font-semibold">Export au format d'import personnalisé</h2>
+        <p className="mb-3 text-xs text-neutral-500">
+          Le format <code>arbre.json</code> (+ <code>images/</code>) utilisé pour importer des actes
+          transcrits — ré-importable tel quel ici ou dans un autre arbre. Un simple <code>.json</code> si
+          aucun acte scanné n'est à joindre, sinon un <code>.zip</code>. Sans masquage, comme la sauvegarde JSON.
+        </p>
+
+        <button
+          disabled={busy === 'customFormat'}
+          onClick={() => run('customFormat', () => exportCustomImportZip(currentTreeId))}
+          className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+        >
+          {busy === 'customFormat' ? 'Export en cours…' : "Télécharger (.zip ou .json)"}
         </button>
       </section>
 
