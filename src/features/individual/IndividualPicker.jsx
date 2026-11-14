@@ -124,7 +124,7 @@ export default function IndividualPicker({ treeId, excludeIds = [], onSelect, pl
         className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent-500 dark:border-neutral-700 dark:bg-neutral-900"
       />
       {showDropdown && (
-        <ul className="absolute z-20 mt-1 w-full rounded-lg border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+        <ul className="absolute z-[1200] mt-1 w-full rounded-lg border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
           {results.map((r) => (
             <li key={r.id}>
               <button

@@ -49,7 +49,7 @@ export default function IndividualDetailView() {
   }
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-6xl">
       <div className="mb-4 flex items-center justify-between">
         <Link to="/individus" className="inline-block text-xs text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200">
           ← Retour à la liste

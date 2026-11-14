@@ -42,6 +42,15 @@ function markerIcon(color, icon, borderColor, approximate) {
   });
 }
 
+/** Centre la carte sur un point choisi dans le panneau des lieux. */
+function FlyTo({ target }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) map.flyTo([target.latitude, target.longitude], 12, { duration: 0.8 });
+  }, [target, map]);
+  return null;
+}
+
 function FitBounds({ points }) {
   const map = useMap();
   useEffect(() => {
@@ -159,6 +168,13 @@ export default function WorldMapView() {
     [pathPeople, events]
   );
 
+  const [focusTarget, setFocusTarget] = useState(null);
+  const eventCountByPlaceId = useMemo(() => {
+    const counts = new Map();
+    for (const e of events) if (e.placeId) counts.set(e.placeId, (counts.get(e.placeId) || 0) + 1);
+    return counts;
+  }, [events]);
+
   const unresolvedCount = places.filter((p) => p.geocode_status === 'pending' || p.geocode_status === 'failed').length;
 
   return (
@@ -184,13 +200,13 @@ export default function WorldMapView() {
             onClick={() => setShowResolver((v) => !v)}
             className="ml-auto rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
-            Lieux à résoudre{unresolvedCount > 0 ? ` (${unresolvedCount})` : ''}
+            Lieux{unresolvedCount > 0 ? ` (${unresolvedCount} à résoudre)` : ''}
           </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-neutral-500 dark:text-neutral-400">Chemins de migration :</span>
-          <div className="w-64">
+          <div className="relative z-[1100] w-64">
             <IndividualPicker
               treeId={currentTreeId}
               excludeIds={pathPeople.map((p) => p.id)}
@@ -216,6 +232,7 @@ export default function WorldMapView() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               <FitBounds points={filteredEvents.length ? filteredEvents : events} />
+              <FlyTo target={focusTarget} />
 
               <MarkerClusterGroup chunkedLoading>
                 {filteredEvents.map((e) => {
@@ -324,6 +341,8 @@ export default function WorldMapView() {
           canEdit={canEdit}
           onPlacesChanged={reload}
           onClose={() => setShowResolver(false)}
+          eventCountByPlaceId={eventCountByPlaceId}
+          onFocusPlace={(point) => point && setFocusTarget({ ...point })}
         />
       )}
     </div>

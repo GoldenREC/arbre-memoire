@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import IndividualPicker from './IndividualPicker.jsx';
 import {
@@ -47,10 +47,16 @@ function PersonLink({ individual }) {
  * se corrige) le graphe que consomment les vues de l'arbre.
  */
 export default function FamilyLinksSection({ individual, treeId, parents, unions, childGroups, events, canEdit, onChanged }) {
+  // Le formulaire d'une union (jusqu'à trois jalons avec lieu et preuve) ne
+  // tient pas dans une colonne sur trois : pendant qu'on en modifie une, le
+  // bloc des unions passe sur toute la largeur, sous les deux autres.
+  const [unionFormOpen, setUnionFormOpen] = useState(false);
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className={`grid gap-4 ${unionFormOpen ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
       <ParentsBlock individualId={individual.id} treeId={treeId} parents={parents} canEdit={canEdit} onChanged={onChanged} />
-      <UnionsBlock individualId={individual.id} treeId={treeId} unions={unions} events={events} canEdit={canEdit} onChanged={onChanged} />
+      <div className={unionFormOpen ? 'order-last sm:col-span-2' : ''}>
+        <UnionsBlock individualId={individual.id} treeId={treeId} unions={unions} events={events} canEdit={canEdit} onChanged={onChanged} onEditingChange={setUnionFormOpen} />
+      </div>
       <ChildrenBlock individualId={individual.id} treeId={treeId} unions={unions} childGroups={childGroups} canEdit={canEdit} onChanged={onChanged} />
     </div>
   );
@@ -124,9 +130,12 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
   );
 }
 
-function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged }) {
+function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged, onEditingChange }) {
   const [adding, setAdding] = useState(false);
   const [editingUnionId, setEditingUnionId] = useState(null);
+  useEffect(() => {
+    onEditingChange?.(editingUnionId !== null);
+  }, [editingUnionId, onEditingChange]);
   // Union tout juste créée, pas encore enregistrée avec sa preuve : si on
   // annule ou ferme son formulaire, elle est retirée (pas d'union sans preuve).
   const [pendingUnionId, setPendingUnionId] = useState(null);

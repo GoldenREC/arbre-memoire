@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { groupPlacesByHierarchy, countCities } from './placeHierarchy.js';
 import {
   listHistoricalAliases, createHistoricalAlias, deleteHistoricalAlias,
   geocodePlace, geocodeAllPendingPlaces, setPlaceCoordinatesManually,
@@ -19,8 +20,8 @@ const STATUS_LABELS = {
  * (toponymes disparus/renommés) consultée en priorité par le
  * géocodeur.
  */
-export default function PlacesResolverPanel({ treeId, places, canEdit, onPlacesChanged, onClose }) {
-  const [tab, setTab] = useState('places'); // places | aliases
+export default function PlacesResolverPanel({ treeId, places, eventCountByPlaceId, canEdit, onPlacesChanged, onClose, onFocusPlace }) {
+  const [tab, setTab] = useState('geocoded'); // geocoded | places | aliases
   const [busyAll, setBusyAll] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [manualEditId, setManualEditId] = useState(null);
@@ -35,6 +36,8 @@ export default function PlacesResolverPanel({ treeId, places, canEdit, onPlacesC
 
   const unresolved = places.filter((p) => p.geocode_status === 'pending' || p.geocode_status === 'failed');
   const resolved = places.filter((p) => p.geocode_status === 'ok' || p.geocode_status === 'manual');
+  const hierarchy = useMemo(() => groupPlacesByHierarchy(places, eventCountByPlaceId), [places, eventCountByPlaceId]);
+  const cityCount = countCities(hierarchy);
 
   async function handleGeocodeOne(place) {
     setBusyId(place.id);
@@ -101,12 +104,12 @@ export default function PlacesResolverPanel({ treeId, places, canEdit, onPlacesC
   return (
     <div className="flex h-full w-80 flex-col border-l border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
       <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3 dark:border-neutral-800">
-        <h2 className="text-sm font-semibold">Lieux à résoudre</h2>
+        <h2 className="text-sm font-semibold">Lieux</h2>
         <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200">✕</button>
       </div>
 
       <div className="flex gap-1 border-b border-neutral-100 px-3 pt-2 dark:border-neutral-800">
-        {[{ key: 'places', label: `Lieux (${unresolved.length})` }, { key: 'aliases', label: 'Correspondances' }].map((t) => (
+        {[{ key: 'geocoded', label: `Communes (${cityCount})` }, { key: 'places', label: `À résoudre (${unresolved.length})` }, { key: 'aliases', label: 'Correspondances' }].map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -118,7 +121,45 @@ export default function PlacesResolverPanel({ treeId, places, canEdit, onPlacesC
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 text-sm">
-        {tab === 'places' ? (
+        {tab === 'geocoded' && (
+          <div className="space-y-1 text-sm">
+            {hierarchy.length === 0 && <p className="text-xs text-neutral-400">Aucun lieu géocodé pour l'instant.</p>}
+            {hierarchy.map((country) => (
+              <details key={country.name} open={hierarchy.length <= 3}>
+                <summary className="cursor-pointer py-1 font-medium">{country.name} <span className="text-xs font-normal text-neutral-400">({country.count})</span></summary>
+                <div className="ml-3 border-l border-neutral-200 pl-2 dark:border-neutral-800">
+                  {country.regions.map((region) => (
+                    <details key={region.name}>
+                      <summary className="cursor-pointer py-0.5">{region.name} <span className="text-xs text-neutral-400">({region.count})</span></summary>
+                      <div className="ml-3 border-l border-neutral-200 pl-2 dark:border-neutral-800">
+                        {region.departments.map((department) => (
+                          <details key={department.name}>
+                            <summary className="cursor-pointer py-0.5 text-neutral-600 dark:text-neutral-300">{department.name} <span className="text-xs text-neutral-400">({department.count})</span></summary>
+                            <ul className="ml-3 border-l border-neutral-200 pl-2 dark:border-neutral-800">
+                              {department.cities.map((city) => (
+                                <li key={city.name}>
+                                  <button
+                                    onClick={() => onFocusPlace?.(city.point)}
+                                    className="w-full py-0.5 text-left text-xs text-accent-600 hover:underline dark:text-accent-400"
+                                    title="Centrer la carte sur cette commune"
+                                  >
+                                    {city.name} <span className="text-neutral-400">({city.count})</span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </details>
+            ))}
+            {hierarchy.length > 0 && <p className="pt-2 text-[11px] text-neutral-400">Entre parenthèses : nombre d'événements. Clique sur une commune pour y centrer la carte.</p>}
+          </div>
+        )}
+        {tab === 'geocoded' ? null : tab === 'places' ? (
           <div className="space-y-3">
             {canEdit && unresolved.length > 0 && (
               <button

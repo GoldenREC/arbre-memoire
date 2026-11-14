@@ -93,7 +93,7 @@ export async function fetchMapEvents(treeId, role, privacyThresholdYears = 100) 
 export async function fetchPlacesWithStatus(treeId) {
   const { data, error } = await supabase
     .from('places')
-    .select('id, raw_label, normalized, latitude, longitude, country, region, geocode_status, geocode_precision, geocoded_at')
+    .select('id, raw_label, normalized, latitude, longitude, country, region, department, city, geocode_status, geocode_precision, geocoded_at')
     .eq('tree_id', treeId)
     .order('raw_label');
   if (error) throw error;

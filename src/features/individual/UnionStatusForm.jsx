@@ -112,11 +112,13 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
     <div className="space-y-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
       <div>
         <span className="mb-1 block text-xs text-neutral-500 dark:text-neutral-400">Statut de l'union</span>
-        <select className="field" value={relationshipStatus} onChange={(e) => setRelationshipStatus(e.target.value)}>
+        <select className="field max-w-xs" value={relationshipStatus} onChange={(e) => setRelationshipStatus(e.target.value)}>
           {Object.entries(RELATIONSHIP_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
 
+      {/* Les jalons côte à côte quand la place le permet (fiche, revue des unions). */}
+      <div className="grid gap-x-6 gap-y-3 lg:grid-cols-2 2xl:grid-cols-3">
       <Milestone label="Mise en couple" value={start} onChange={setStart} loadingPlaces={loadingPlaces} {...proofProps('union_start')} />
 
       {(relationshipStatus === 'married' || relationshipStatus === 'divorced') && (
@@ -126,6 +128,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
       {relationshipStatus === 'divorced' && (
         <Milestone label="Divorce" value={divorce} onChange={setDivorce} loadingPlaces={loadingPlaces} {...proofProps('divorce')} />
       )}
+      </div>
 
       <div className="flex gap-2 pt-1">
         <button
@@ -145,7 +148,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
 
 function Milestone({ label, value, onChange, loadingPlaces, hasProof, proofRequired, proof, onProofChange, proofMessage }) {
   return (
-    <div className="space-y-1.5 border-t border-neutral-100 pt-2 dark:border-neutral-800">
+    <div className="space-y-1.5 rounded-md border border-neutral-100 p-2 dark:border-neutral-800">
       <span className="block text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <DatePartsInput value={value.date} onChange={(v) => onChange((s) => ({ ...s, date: v }))} disabled={loadingPlaces} />
