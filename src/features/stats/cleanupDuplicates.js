@@ -8,6 +8,14 @@
 import { supabase } from '../../lib/supabaseClient.js';
 
 export async function cleanupTreeEventDuplicates(treeId) {
+  // Lieux d'abord (supabase/dedupe_events_by_place_label.sql) : deux
+  // événements identiques rattachés à deux fiches "lieu" jumelles ne sont
+  // reconnus comme doublons qu'une fois ces lieux fusionnés. Facultatif :
+  // si la fonction n'est pas installée, le reste du nettoyage continue.
+  let placesMerged = null;
+  const { data: placeCount, error: placeErr } = await supabase.rpc('cleanup_tree_place_duplicates', { p_tree_id: treeId });
+  if (!placeErr) placesMerged = placeCount ?? 0;
+
   const { data, error } = await supabase.rpc('cleanup_tree_event_duplicates', { p_tree_id: treeId });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
@@ -25,6 +33,7 @@ export async function cleanupTreeEventDuplicates(treeId) {
     unionsMerged: row?.unions_merged ?? 0,
     eventsRemoved: row?.events_removed ?? 0,
     sourcesRemoved,
+    placesMerged,
     sourcesError,
   };
 }

@@ -92,3 +92,47 @@ begin
   return v_removed;
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- CLEANUP_TREE_PLACE_DUPLICATES — fusionne les fiches "lieu" qui portent
+-- exactement le même libellé (cause première des événements en double
+-- non reconnus, et des lieux comptés plusieurs fois sur la carte et dans
+-- les statistiques). On garde la fiche géolocalisée, sinon la plus
+-- ancienne ; personnes, unions et événements sont rattachés à elle.
+-- Appelée par le bouton "Nettoyer les doublons" de la page Audit.
+-- ---------------------------------------------------------------------
+create or replace function cleanup_tree_place_duplicates(p_tree_id uuid)
+returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  v_count integer;
+begin
+  if not is_tree_family_or_admin(p_tree_id) then
+    raise exception 'Droits insuffisants pour nettoyer les lieux de cet arbre.';
+  end if;
+
+  drop table if exists _place_merge_map;
+  create temp table _place_merge_map as
+  select src, keep from (
+    select p.id as src,
+           first_value(p.id) over (
+             partition by lower(btrim(p.raw_label))
+             order by (p.latitude is not null) desc, p.created_at asc, p.id asc
+           ) as keep
+    from places p
+    where p.tree_id = p_tree_id
+  ) ranked
+  where src <> keep;
+
+  update individuals i set birth_place_id = m.keep from _place_merge_map m where i.birth_place_id = m.src;
+  update individuals i set death_place_id = m.keep from _place_merge_map m where i.death_place_id = m.src;
+  update unions u set place_id = m.keep from _place_merge_map m where u.place_id = m.src;
+  update events e set place_id = m.keep from _place_merge_map m where e.place_id = m.src;
+  delete from places p using _place_merge_map m where p.id = m.src;
+  get diagnostics v_count = row_count;
+
+  drop table if exists _place_merge_map;
+  return v_count;
+end;
+$$;
+grant execute on function cleanup_tree_place_duplicates(uuid) to authenticated;

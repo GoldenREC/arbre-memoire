@@ -144,10 +144,13 @@ export default function AuditPage() {
           disabled={cleanup.running}
           className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-200 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-200"
         >
-          {cleanup.running ? 'Nettoyage en cours…' : 'Nettoyer les doublons (événements, unions, sources)'}
+          {cleanup.running ? 'Nettoyage en cours…' : 'Nettoyer les doublons (lieux, événements, unions, sources)'}
         </button>
         {cleanup.result && (
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
+            {cleanup.result.placesMerged === null
+              ? 'Lieux non traités (exécute supabase/dedupe_events_by_place_label.sql). '
+              : `${cleanup.result.placesMerged} lieu(x) en double fusionné(s), `}
             {cleanup.result.unionsMerged} union(s) fusionnée(s), {cleanup.result.eventsRemoved} événement(s) en double supprimé(s)
             {cleanup.result.sourcesRemoved === null
               ? `. Sources non traitées (${cleanup.result.sourcesError || 'erreur inconnue'}) : vérifie que supabase/dedupe_sources.sql est bien exécuté.`
