@@ -1,4 +1,20 @@
 import { CATEGORICAL, GRID, useChartMode } from '../chartColors.js';
+import { useElementWidth } from '../../../hooks/useElementWidth.js';
+
+const VIEWBOX_WIDTH = 100;
+
+/**
+ * Contrepartie horizontale appliquée à un <text> pour annuler l'étirement
+ * non uniforme causé par `preserveAspectRatio="none"` (le viewBox fait
+ * `VIEWBOX_WIDTH` unités de large, mais le SVG est rendu sur toute la
+ * largeur réelle du conteneur — sans ça, chaque glyphe serait étiré
+ * horizontalement d'un facteur `scaleX`, le rendant illisible). La
+ * mise à l'échelle inverse se fait autour de `tx` pour que le texte
+ * garde sa position apparente.
+ */
+function unstretch(tx, scaleX) {
+  return scaleX === 1 ? undefined : `translate(${tx},0) scale(${1 / scaleX},1) translate(${-tx},0)`;
+}
 
 /**
  * Graphique en barres verticales, une ou deux séries, le long d'un axe
@@ -15,6 +31,8 @@ export default function VerticalBars({ data, series, height = 200, markers = nul
   const mode = useChartMode();
   const colors = CATEGORICAL[mode];
   const grid = GRID[mode];
+  const [svgRef, measuredWidth] = useElementWidth();
+  const scaleX = measuredWidth > 0 ? measuredWidth / VIEWBOX_WIDTH : 1;
 
   if (!data.length) return <p className="text-sm text-neutral-400">Pas assez de données.</p>;
 
@@ -34,7 +52,7 @@ export default function VerticalBars({ data, series, height = 200, markers = nul
           ))}
         </div>
       )}
-      <svg viewBox={`0 0 100 ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none">
+      <svg ref={svgRef} viewBox={`0 0 100 ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none">
         <line x1="0" y1={height - 20} x2="100" y2={height - 20} stroke={grid} strokeWidth="0.5" />
         {data.map((d, gi) => {
           const groupX = gi * barGroupWidth;
@@ -46,13 +64,14 @@ export default function VerticalBars({ data, series, height = 200, markers = nul
                 const barH = (value / max) * (height - 34);
                 const x = groupX + barGroupWidth / 2 - (barWidth * series.length) / 2 + si * barWidth;
                 const y = height - 20 - barH;
+                const labelX = x + (barWidth * 0.85) / 2;
                 return (
                   <g key={s.key}>
                     <rect x={x} y={y} width={barWidth * 0.85} height={barH} rx="1.5" fill={colors[si]}>
                       <title>{`${d.x} — ${s.label} : ${value}${valueSuffix}`}</title>
                     </rect>
                     {value > 0 && (
-                      <text x={x + (barWidth * 0.85) / 2} y={y - 2} textAnchor="middle" fontSize="4.5" className="fill-neutral-500 dark:fill-neutral-400">
+                      <text x={labelX} y={y - 2} textAnchor="middle" fontSize="4.5" transform={unstretch(labelX, scaleX)} className="fill-neutral-500 dark:fill-neutral-400">
                         {value}
                       </text>
                     )}
@@ -60,11 +79,17 @@ export default function VerticalBars({ data, series, height = 200, markers = nul
                 );
               })}
               {isMarked && (
-                <text x={groupX + barGroupWidth / 2} y={height - 24 - (Math.max(...series.map((s) => d.values[s.key] || 0)) / max) * (height - 34)} textAnchor="middle" fontSize="6">
+                <text
+                  x={groupX + barGroupWidth / 2}
+                  y={height - 24 - (Math.max(...series.map((s) => d.values[s.key] || 0)) / max) * (height - 34)}
+                  textAnchor="middle"
+                  fontSize="6"
+                  transform={unstretch(groupX + barGroupWidth / 2, scaleX)}
+                >
                   ⚠
                 </text>
               )}
-              <text x={groupX + barGroupWidth / 2} y={height - 9} textAnchor="middle" fontSize="4.5" className="fill-neutral-500 dark:fill-neutral-400">
+              <text x={groupX + barGroupWidth / 2} y={height - 9} textAnchor="middle" fontSize="4.5" transform={unstretch(groupX + barGroupWidth / 2, scaleX)} className="fill-neutral-500 dark:fill-neutral-400">
                 {d.x}
               </text>
             </g>
