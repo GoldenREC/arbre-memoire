@@ -136,3 +136,106 @@ begin
 end;
 $$;
 grant execute on function cleanup_tree_place_duplicates(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- CLEANUP_TREE_EVENT_DUPLICATES (nouvelle version, même signature) —
+-- avant de dédoublonner, aligne les exemplaires d'un même événement
+-- unique qui se contredisent, selon trois règles prudentes :
+--  1. Naissance et décès : la fiche fait foi. La date et le lieu affichés
+--     sur la fiche de la personne sont reportés sur tous ses événements
+--     de naissance (ou de décès), qui deviennent identiques et fusionnent.
+--     Les dates d'attente d'un ancien import ("1er janvier 1900, France")
+--     disparaissent ainsi au profit de ce que montre la fiche.
+--  2. Événement d'union sans date alors qu'un seul autre exemplaire en a
+--     une : il prend cette date.
+--  3. Événements d'union de même type et de même date mais aux lieux
+--     écrits différemment ("La Garde, Var" / "La Garde, Var, Provence-
+--     Alpes-Côte d'Azur, France") : tous prennent le lieu le plus détaillé.
+-- Aucune preuve n'est perdue : les citations suivent l'événement conservé.
+-- Deux mariages d'une même union à deux dates différentes ne sont pas
+-- touchés : ils restent signalés dans l'Audit, à trancher à la main.
+-- ---------------------------------------------------------------------
+create or replace function cleanup_tree_event_duplicates(p_tree_id uuid)
+returns table(unions_merged integer, events_removed integer)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_unions_merged integer;
+  v_events_removed integer := 0;
+  v_removed integer;
+  ind record;
+  u record;
+begin
+  if not is_tree_family_or_admin(p_tree_id) then
+    raise exception 'Droits insuffisants pour nettoyer les doublons sur cet arbre.';
+  end if;
+
+  v_unions_merged := merge_duplicate_unions_sharing_partners(p_tree_id, null);
+
+  -- Règle 1 : la fiche fait foi pour la naissance et le décès.
+  update events e
+  set event_date = i.birth_date,
+      date_precision = coalesce(i.birth_date_precision, e.date_precision),
+      place_id = i.birth_place_id
+  from individuals i
+  where i.tree_id = p_tree_id
+    and e.subject_kind = 'individual' and e.subject_id = i.id and e.event_type = 'birth'
+    and (i.birth_date is not null or i.birth_place_id is not null)
+    and (select count(*) from events e2
+         where e2.subject_kind = 'individual' and e2.subject_id = i.id and e2.event_type = 'birth') > 1;
+
+  update events e
+  set event_date = i.death_date,
+      date_precision = coalesce(i.death_date_precision, e.date_precision),
+      place_id = i.death_place_id
+  from individuals i
+  where i.tree_id = p_tree_id
+    and e.subject_kind = 'individual' and e.subject_id = i.id and e.event_type = 'death'
+    and (i.death_date is not null or i.death_place_id is not null)
+    and (select count(*) from events e2
+         where e2.subject_kind = 'individual' and e2.subject_id = i.id and e2.event_type = 'death') > 1;
+
+  -- Règle 2 : un événement d'union sans date adopte l'unique date connue.
+  update events e
+  set event_date = d.only_date
+  from (
+    select e2.subject_id, e2.event_type, min(e2.event_date) as only_date
+    from events e2
+    where e2.tree_id = p_tree_id and e2.subject_kind = 'union'
+      and e2.event_type in ('marriage', 'divorce', 'union_start')
+    group by e2.subject_id, e2.event_type
+    having count(distinct e2.event_date) = 1 and count(*) > count(e2.event_date)
+  ) d
+  where e.subject_kind = 'union' and e.subject_id = d.subject_id and e.event_type = d.event_type
+    and e.event_date is null;
+
+  -- Règle 3 : même type, même date -> le lieu le plus détaillé pour tous.
+  update events e
+  set place_id = best.place_id
+  from (
+    select distinct on (e2.subject_id, e2.event_type, e2.event_date)
+           e2.subject_id, e2.event_type, e2.event_date, e2.place_id
+    from events e2
+    left join places pl on pl.id = e2.place_id
+    where e2.tree_id = p_tree_id and e2.subject_kind = 'union'
+      and e2.event_type in ('marriage', 'divorce', 'union_start')
+    order by e2.subject_id, e2.event_type, e2.event_date,
+             length(coalesce(pl.raw_label, '')) desc, e2.created_at asc, e2.id asc
+  ) best
+  where e.subject_kind = 'union' and e.subject_id = best.subject_id and e.event_type = best.event_type
+    and e.event_date is not distinct from best.event_date
+    and e.place_id is distinct from best.place_id;
+
+  for ind in select id from individuals where tree_id = p_tree_id loop
+    v_removed := dedupe_events_for_subject('individual', ind.id);
+    v_events_removed := v_events_removed + v_removed;
+  end loop;
+
+  for u in select id from unions where tree_id = p_tree_id loop
+    v_removed := dedupe_events_for_subject('union', u.id);
+    v_events_removed := v_events_removed + v_removed;
+  end loop;
+
+  return query select v_unions_merged, v_events_removed;
+end;
+$$;
+grant execute on function cleanup_tree_event_duplicates(uuid) to authenticated;
