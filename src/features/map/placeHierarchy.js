@@ -7,10 +7,14 @@
  * Chaque commune porte le nombre d'événements qui s'y déroulent et un
  * point (le premier lieu géocodé de la commune) pour y centrer la carte.
  */
+import { regionOfFrenchDepartment } from '../../lib/geo/frenchDepartments.js';
+
 const UNKNOWN = { country: 'Pays inconnu', region: 'Région non renseignée', department: 'Département non renseigné', city: 'Commune non renseignée' };
 
 function sortedEntries(map) {
-  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  // Les rubriques "non renseigné" / "inconnu" passent en dernier.
+  const unknown = (n) => (Object.values(UNKNOWN).includes(n) ? 1 : 0);
+  return [...map.values()].sort((a, b) => unknown(a.name) - unknown(b.name) || a.name.localeCompare(b.name, 'fr'));
 }
 
 export function groupPlacesByHierarchy(places, eventCountByPlaceId = new Map()) {
@@ -23,8 +27,10 @@ export function groupPlacesByHierarchy(places, eventCountByPlaceId = new Map()) 
   for (const p of places) {
     if (p.latitude == null || p.longitude == null) continue;
     const events = eventCountByPlaceId.get(p.id) || 0;
-    const country = child(countries, (p.country || '').trim() || UNKNOWN.country);
-    const region = child(country.children, (p.region || '').trim() || UNKNOWN.region);
+    // Seul le département est connu : s'il est français, sa région s'en déduit.
+    const frenchRegion = regionOfFrenchDepartment(p.department);
+    const country = child(countries, (p.country || '').trim() || (frenchRegion ? 'France' : UNKNOWN.country));
+    const region = child(country.children, (p.region || '').trim() || frenchRegion || UNKNOWN.region);
     const department = child(region.children, (p.department || '').trim() || UNKNOWN.department);
     const city = child(department.children, (p.city || '').trim() || UNKNOWN.city);
     for (const node of [country, region, department, city]) node.count += events;

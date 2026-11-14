@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { groupPlacesByHierarchy, countCities } from './placeHierarchy.js';
+import { backfillPlaceHierarchy, placesNeedingBackfill } from '../../lib/geo/placeBackfill.js';
 import {
   listHistoricalAliases, createHistoricalAlias, deleteHistoricalAlias,
   geocodePlace, geocodeAllPendingPlaces, setPlaceCoordinatesManually,
@@ -23,6 +24,15 @@ const STATUS_LABELS = {
 export default function PlacesResolverPanel({ treeId, places, eventCountByPlaceId, canEdit, onPlacesChanged, onClose, onFocusPlace }) {
   const [tab, setTab] = useState('geocoded'); // geocoded | places | aliases
   const [busyAll, setBusyAll] = useState(false);
+  const [backfill, setBackfill] = useState(null); // { done, total } pendant le complément, { result } après
+  const incomplete = useMemo(() => placesNeedingBackfill(places).length, [places]);
+
+  async function handleBackfill() {
+    setBackfill({ done: 0, total: incomplete });
+    const updated = await backfillPlaceHierarchy(places, (done, total) => setBackfill({ done, total }));
+    setBackfill({ result: updated });
+    onPlacesChanged();
+  }
   const [busyId, setBusyId] = useState(null);
   const [manualEditId, setManualEditId] = useState(null);
   const [manualForm, setManualForm] = useState({ latitude: '', longitude: '', country: '', region: '' });
@@ -123,6 +133,16 @@ export default function PlacesResolverPanel({ treeId, places, eventCountByPlaceI
       <div className="flex-1 overflow-y-auto p-3 text-sm">
         {tab === 'geocoded' && (
           <div className="space-y-1 text-sm">
+            {canEdit && incomplete > 0 && (
+              <div className="mb-2 rounded-md border border-neutral-200 p-2 text-xs dark:border-neutral-800">
+                <p className="text-neutral-500">{incomplete} lieu(x) sans pays, région, département ou commune.</p>
+                <button onClick={handleBackfill} disabled={backfill?.total != null} className="mt-1 rounded bg-accent-600 px-2 py-1 font-medium text-white disabled:opacity-60">
+                  {backfill?.total != null ? `Complément en cours… ${backfill.done}/${backfill.total}` : 'Compléter automatiquement'}
+                </button>
+                {backfill?.total == null && <span className="ml-2 text-neutral-400">environ {Math.max(1, Math.round(incomplete * 1.2 / 60))} min — rien de saisi n'est écrasé</span>}
+                {backfill?.result != null && <p className="mt-1 text-emerald-600">{backfill.result} lieu(x) complété(s).</p>}
+              </div>
+            )}
             {hierarchy.length === 0 && <p className="text-xs text-neutral-400">Aucun lieu géocodé pour l'instant.</p>}
             {hierarchy.map((country) => (
               <details key={country.name} open={hierarchy.length <= 3}>

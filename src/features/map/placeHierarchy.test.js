@@ -4,6 +4,12 @@ import { groupPlacesByHierarchy, countCities } from './placeHierarchy.js';
 const place = (id, city, department, region, country, extra = {}) => ({ id, city, department, region, country, latitude: 1, longitude: 2, ...extra });
 
 describe('groupPlacesByHierarchy', () => {
+  it('déduit région et pays d\'un département français seul, et place les inconnus en dernier', () => {
+    const t = groupPlacesByHierarchy([place('a', 'Millau', 'Aveyron', null, null), place('b', 'Arequipa', 'Arequipa', null, null)]);
+    expect(t.map((c) => c.name)).toEqual(['France', 'Pays inconnu']);
+    expect(t[0].regions[0].name).toBe('Occitanie');
+  });
+
   const places = [
     place('p1', 'Paris', 'Paris', 'Île-de-France', 'France'),
     place('p2', 'Paris', 'Paris', 'Île-de-France', 'France', { latitude: 9, longitude: 9 }), // autre rue de la même commune

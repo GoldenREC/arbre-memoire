@@ -151,6 +151,8 @@ async function geocodeViaNominatim(query) {
   url.searchParams.set('format', 'json');
   url.searchParams.set('limit', '1');
   url.searchParams.set('q', query);
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('accept-language', 'fr');
   if (CONTACT_EMAIL) url.searchParams.set('email', CONTACT_EMAIL);
 
   const res = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
@@ -184,8 +186,8 @@ export async function geocodePlace(place, { year, aliases = [] } = {}) {
     const patch = {
       latitude: alias.latitude,
       longitude: alias.longitude,
-      country: alias.country,
-      region: alias.region,
+      country: place.country || alias.country,
+      region: place.region || alias.region,
       geocoded_at: new Date().toISOString(),
       geocode_status: 'ok',
       geocode_precision: 'alias',
@@ -203,8 +205,9 @@ export async function geocodePlace(place, { year, aliases = [] } = {}) {
         const patch = {
           latitude: result.latitude,
           longitude: result.longitude,
-          country: result.country,
-          region: result.region,
+          // Ce qui a été saisi prime : le géocodeur ne fait que combler les vides.
+          country: place.country || result.country,
+          region: place.region || result.region,
           geocoded_at: new Date().toISOString(),
           geocode_status: 'ok',
           geocode_precision: levels[i].precision,
