@@ -5,6 +5,8 @@
  * sous-composants restent des composants d'affichage.
  */
 import { supabase } from '../../lib/supabaseClient.js';
+import { toProperCase } from '../../lib/utils/properCase.js';
+import { composePlaceLabel, isPlaceEmpty } from '../../lib/utils/placeLabel.js';
 
 /** Retrouve un lieu existant par libellé normalisé, sinon le crée. */
 export async function findOrCreatePlace(treeId, rawLabel) {
@@ -25,6 +27,53 @@ export async function findOrCreatePlace(treeId, rawLabel) {
   const { data: created, error: createErr } = await supabase
     .from('places')
     .insert({ tree_id: treeId, raw_label: trimmed, normalized })
+    .select('id')
+    .single();
+  if (createErr) throw createErr;
+  return created.id;
+}
+
+/**
+ * Retrouve un lieu structuré existant (même libellé composé normalisé),
+ * sinon le crée avec ses champs détaillés — pendant de findOrCreatePlace
+ * pour le nouveau formulaire de création (lieu de naissance/décès en 9
+ * champs, voir components/ui/StructuredPlaceInput.jsx). `place` : objet
+ * { streetNumber, streetName, buildingName, arrondissement, city,
+ * postalCode, department, region, country }. raw_label/normalized sont
+ * composés automatiquement, pour rester dédoublonnables comme avant.
+ */
+export async function findOrCreateStructuredPlace(treeId, place) {
+  if (isPlaceEmpty(place)) return null;
+  const rawLabel = composePlaceLabel(place);
+  if (!rawLabel) return null;
+  const normalized = rawLabel.toLowerCase();
+
+  const { data: existing, error: findErr } = await supabase
+    .from('places')
+    .select('id')
+    .eq('tree_id', treeId)
+    .eq('normalized', normalized)
+    .limit(1)
+    .maybeSingle();
+  if (findErr) throw findErr;
+  if (existing) return existing.id;
+
+  const { data: created, error: createErr } = await supabase
+    .from('places')
+    .insert({
+      tree_id: treeId,
+      raw_label: rawLabel,
+      normalized,
+      street_number: place.streetNumber?.trim() || null,
+      street_name: place.streetName?.trim() || null,
+      building_name: place.buildingName?.trim() || null,
+      arrondissement: place.arrondissement?.trim() || null,
+      city: place.city?.trim() || null,
+      postal_code: place.postalCode?.trim() || null,
+      department: place.department?.trim() || null,
+      region: place.region?.trim() || null,
+      country: place.country?.trim() || null,
+    })
     .select('id')
     .single();
   if (createErr) throw createErr;
@@ -84,6 +133,57 @@ export async function createIndividual(treeId, { firstNames, lastName, sex } = {
   return data;
 }
 
+/**
+ * Création complète d'un individu depuis le formulaire détaillé de
+ * "Fiches individus" (prénoms, nom de naissance/marital, sexe, date et
+ * lieu de naissance, vivant/décédé et date/lieu de décès). Contrairement
+ * à createIndividual (fiche vierge, utilisée par IndividualPicker), ici
+ * tout ce qui est fourni est enregistré directement — la fiche détaillée
+ * reste le seul endroit pour corriger ensuite.
+ *
+ * Nom de naissance / nom marital : le schéma a déjà les deux colonnes
+ * qu'il faut (birth_name / last_name, voir schema.sql) — birth_name
+ * reçoit toujours le nom de naissance, last_name (le nom "d'usage" lu
+ * partout dans l'UI) reçoit le nom marital s'il est fourni (uniquement
+ * pertinent pour une femme), sinon retombe sur le nom de naissance.
+ *
+ * `input` : { firstNames, birthName, maritalLastName, sex, birthDate
+ * (ISO ou null), birthPlace (objet structuré ou null), isDeceased,
+ * deathDate, deathPlace }. La casse des champs texte est renormalisée
+ * ici par sécurité (le formulaire l'applique déjà au blur).
+ */
+export async function createIndividualFull(treeId, input = {}) {
+  const birthName = toProperCase(input.birthName?.trim() || '') || null;
+  const maritalLastName = input.sex === 'F' ? toProperCase(input.maritalLastName?.trim() || '') || null : null;
+  const lastName = maritalLastName || birthName;
+
+  const [birthPlaceId, deathPlaceId] = await Promise.all([
+    findOrCreateStructuredPlace(treeId, input.birthPlace),
+    input.isDeceased ? findOrCreateStructuredPlace(treeId, input.deathPlace) : Promise.resolve(null),
+  ]);
+
+  const { data, error } = await supabase
+    .from('individuals')
+    .insert({
+      tree_id: treeId,
+      first_names: toProperCase(input.firstNames?.trim() || '') || null,
+      birth_name: birthName,
+      last_name: lastName,
+      sex: input.sex || 'U',
+      birth_date: input.birthDate || null,
+      birth_date_precision: input.birthDate ? 'exact' : 'unknown',
+      birth_place_id: birthPlaceId,
+      is_deceased: !!input.isDeceased,
+      death_date: input.isDeceased ? input.deathDate || null : null,
+      death_date_precision: input.isDeceased && input.deathDate ? 'exact' : 'unknown',
+      death_place_id: input.isDeceased ? deathPlaceId : null,
+    })
+    .select('id, first_names, last_name')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------------
 // Liens familiaux
 // ---------------------------------------------------------------------
@@ -105,6 +205,37 @@ export async function addChildLink(treeId, parentId, childId, filiationType = 'b
 export async function removeFiliation(filiationId) {
   const { error } = await supabase.from('filiations').delete().eq('id', filiationId);
   if (error) throw error;
+}
+
+/** Parents déjà enregistrés d'un individu — { parentId, unionId } pour chacun. */
+export async function fetchParentsOf(individualId) {
+  const { data, error } = await supabase
+    .from('filiations')
+    .select('parent_id, union_id')
+    .eq('child_id', individualId);
+  if (error) throw error;
+  return (data || []).map((r) => ({ parentId: r.parent_id, unionId: r.union_id }));
+}
+
+/**
+ * Relie newIndividualId comme frère/sœur de existingIndividualId : lui
+ * attribue les mêmes parents (et, quand elle est connue, la même union),
+ * puisqu'un lien "frère/sœur" direct n'existe pas dans le schéma — c'est
+ * le partage des mêmes parents qui le représente. Renvoie le nombre de
+ * parents repris (0, 1 ou 2).
+ */
+export async function linkAsSibling(treeId, newIndividualId, existingIndividualId) {
+  const parents = await fetchParentsOf(existingIndividualId);
+  for (const { parentId, unionId } of parents) {
+    const { error } = await supabase
+      .from('filiations')
+      .upsert(
+        { tree_id: treeId, child_id: newIndividualId, parent_id: parentId, filiation_type: 'biological', union_id: unionId },
+        { onConflict: 'child_id,parent_id' }
+      );
+    if (error) throw error;
+  }
+  return parents.length;
 }
 
 export async function createUnion(treeId, individualId, partnerId, info = {}) {
