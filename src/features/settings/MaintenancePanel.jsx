@@ -1,11 +1,19 @@
 import { useRef, useState } from 'react';
 import JSZip from 'jszip';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { exportJsonBackup } from '../../lib/export/jsonExporter.js';
 import { restoreTreeSnapshot, validateSnapshotShape, summarizeSnapshot } from '../../lib/export/snapshotRestore.js';
 import { supabase } from '../../lib/supabaseClient.js';
-import { listOrphanedMediaFiles, deleteOrphanedFiles, fetchRecordHistory } from '../../lib/db/adminMaintenance.js';
+import { listOrphanedMediaFiles, deleteOrphanedFiles, fetchRecordHistory, deleteTree } from '../../lib/db/adminMaintenance.js';
+
+// Phrase de confirmation volontairement fixe (non traduite) : il s'agit d'une
+// action destructive et irréversible, la même phrase doit être tapée quelle
+// que soit la langue de l'interface — comme "RESTAURER" plus haut, mais en
+// version longue pour une action encore plus définitive (perte de tout
+// l'arbre, pas juste remplacement par une sauvegarde).
+const DELETE_TREE_CONFIRM_PHRASE = 'je souhaite supprimé mon arbre généalogique';
 
 const OPERATION_LABEL = { insert: 'Création', update: 'Modification', delete: 'Suppression' };
 const TABLE_LABEL = { individuals: 'Individu', unions: 'Union', filiations: 'Filiation', events: 'Événement', citations: 'Citation' };
@@ -20,7 +28,8 @@ function formatBytes(n) {
 /** Onglet Paramètres → Maintenance (Snapshot, fichiers orphelins, journal d'activité). Réservé aux administrateurs. */
 export default function MaintenancePanel() {
   const { t } = useTranslation();
-  const { currentTreeId } = useAuthStore();
+  const { currentTreeId, role, loadTrees } = useAuthStore();
+  const navigate = useNavigate();
 
   // --- Snapshot : sauvegarde ---
   const [backingUp, setBackingUp] = useState(false);
@@ -135,6 +144,26 @@ export default function MaintenancePanel() {
       setSelectedOrphans(new Set());
     } finally {
       setCleaning(false);
+    }
+  }
+
+  // --- Zone de danger : suppression définitive de l'arbre ---
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingTree, setDeletingTree] = useState(false);
+  const [deleteTreeError, setDeleteTreeError] = useState(null);
+
+  async function handleDeleteTree() {
+    if (deleteConfirmText.trim() !== DELETE_TREE_CONFIRM_PHRASE) return;
+    setDeletingTree(true);
+    setDeleteTreeError(null);
+    try {
+      await deleteTree(currentTreeId);
+      await loadTrees(); // repart avec un arbre vide (créé automatiquement, voir useAuthStore)
+      navigate('/');
+    } catch (err) {
+      setDeleteTreeError(err.message || "La suppression a échoué.");
+      setDeletingTree(false);
     }
   }
 
@@ -277,6 +306,53 @@ export default function MaintenancePanel() {
           </ul>
         )}
       </section>
+
+      {/* Zone de danger */}
+      {role === 'admin' && (
+        <section className="rounded-xl border border-red-200 p-4 dark:border-red-900">
+          <h2 className="mb-1 text-sm font-semibold text-red-700 dark:text-red-400">{t('settings.maintenance.dangerZoneTitle')}</h2>
+          <p className="mb-3 text-xs text-neutral-500">{t('settings.maintenance.deleteTreeHelp')}</p>
+
+          {!confirmingDelete ? (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+            >
+              {t('settings.maintenance.deleteTreeButton')}
+            </button>
+          ) : (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950">
+              <p className="mb-2 text-red-800 dark:text-red-200">{t('settings.maintenance.deleteTreeConfirmPrompt')}</p>
+              <p className="mb-2 select-all rounded bg-white px-2 py-1 font-mono text-xs text-red-900 dark:bg-neutral-900 dark:text-red-200">
+                {DELETE_TREE_CONFIRM_PHRASE}
+              </p>
+              <input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="mb-2 w-full rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm outline-none dark:border-red-800 dark:bg-neutral-900"
+                autoFocus
+              />
+              {deleteTreeError && <p className="mb-2 text-xs text-red-700 dark:text-red-400">{deleteTreeError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDeleteTree}
+                  disabled={deleteConfirmText.trim() !== DELETE_TREE_CONFIRM_PHRASE || deletingTree}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deletingTree ? '…' : t('settings.maintenance.deleteTreeConfirmSubmit')}
+                </button>
+                <button
+                  onClick={() => { setConfirmingDelete(false); setDeleteConfirmText(''); setDeleteTreeError(null); }}
+                  disabled={deletingTree}
+                  className="rounded-lg px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

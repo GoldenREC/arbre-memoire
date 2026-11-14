@@ -123,7 +123,12 @@
       "scan": "Analysieren",
       "noOrphans": "Keine verwaisten Dateien gefunden.",
       "auditLogTitle": "Aktivitätsprotokoll",
-      "auditLogHelp": "Wer was geändert hat, und wann — über alle Karten hinweg, Administratoren eingeschlossen."
+      "auditLogHelp": "Wer was geändert hat, und wann — über alle Karten hinweg, Administratoren eingeschlossen.",
+      "dangerZoneTitle": "Gefahrenzone",
+      "deleteTreeHelp": "Löscht den gesamten Inhalt dieses Stammbaums endgültig (Karten, Verbindungen, Abstammungen, Quellen, Medien, Aktivitätsprotokoll…), um mit einem sauberen Import neu zu beginnen. Unumkehrbar und nur dem Besitzer des Stammbaums vorbehalten.",
+      "deleteTreeButton": "Stammbaum löschen",
+      "deleteTreeConfirmPrompt": "Gib zur Bestätigung genau den folgenden Satz ein (auf Französisch):",
+      "deleteTreeConfirmSubmit": "Endgültig löschen"
     }
   }
 }
