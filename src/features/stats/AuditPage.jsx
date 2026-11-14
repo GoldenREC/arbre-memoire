@@ -148,7 +148,7 @@ export default function AuditPage() {
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
             {cleanup.result.unionsMerged} union(s) fusionnée(s), {cleanup.result.eventsRemoved} événement(s) en double supprimé(s)
             {cleanup.result.sourcesRemoved === null
-              ? '. Sources non traitées : exécute supabase/dedupe_sources.sql dans Supabase.'
+              ? `. Sources non traitées (${cleanup.result.sourcesError || 'erreur inconnue'}) : vérifie que supabase/dedupe_sources.sql est bien exécuté.`
               : `, ${cleanup.result.sourcesRemoved} source(s) en double supprimée(s).`}
           </span>
         )}

@@ -16,12 +16,15 @@ export async function cleanupTreeEventDuplicates(treeId) {
   // n'est pas encore installée en base, le reste du nettoyage reste
   // valable : on le signale sans tout faire échouer.
   let sourcesRemoved = null;
+  let sourcesError = null;
   const { data: sourceCount, error: sourceErr } = await supabase.rpc('cleanup_tree_source_duplicates', { p_tree_id: treeId });
-  if (!sourceErr) sourcesRemoved = sourceCount ?? 0;
+  if (sourceErr) sourcesError = sourceErr.message || String(sourceErr);
+  else sourcesRemoved = sourceCount ?? 0;
 
   return {
     unionsMerged: row?.unions_merged ?? 0,
     eventsRemoved: row?.events_removed ?? 0,
     sourcesRemoved,
+    sourcesError,
   };
 }
