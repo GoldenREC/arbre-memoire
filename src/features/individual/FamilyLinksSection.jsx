@@ -115,7 +115,7 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
           <select className="field" value={filiationType} onChange={(e) => setFiliationType(e.target.value)}>
             {Object.entries(FILIATION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <IndividualPicker treeId={treeId} excludeIds={[individualId, ...parents.map((p) => p.individual?.id)]} onSelect={handleSelect} />
+          <IndividualPicker treeId={treeId} excludeIds={[individualId, ...parents.map((p) => p.individual?.id)]} onSelect={handleSelect} allowCreate />
         </div>
       )}
     </Block>
@@ -163,7 +163,7 @@ function UnionsBlock({ individualId, treeId, unions, canEdit, onChanged }) {
       ))}
       {adding && (
         <div className="pt-1">
-          <IndividualPicker treeId={treeId} excludeIds={[individualId, ...unions.map((u) => u.partner?.id)]} onSelect={handleSelect} />
+          <IndividualPicker treeId={treeId} excludeIds={[individualId, ...unions.map((u) => u.partner?.id)]} onSelect={handleSelect} allowCreate />
         </div>
       )}
     </Block>
@@ -235,7 +235,7 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
               ))}
             </select>
           )}
-          <IndividualPicker treeId={treeId} excludeIds={[individualId, ...allChildren.map((c) => c.individual?.id)]} onSelect={handleSelect} />
+          <IndividualPicker treeId={treeId} excludeIds={[individualId, ...allChildren.map((c) => c.individual?.id)]} onSelect={handleSelect} allowCreate />
         </div>
       )}
     </Block>

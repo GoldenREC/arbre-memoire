@@ -61,6 +61,29 @@ export async function updateBiography(individualId, biography) {
   if (error) throw error;
 }
 
+/**
+ * Crée un individu "vierge" — seul moyen d'ajouter une personne à
+ * l'arbre en dehors d'un import GEDCOM (depuis la liste des fiches, ou
+ * à la volée quand on cherche un parent/conjoint/enfant qui n'existe
+ * pas encore, voir IndividualPicker). Les autres informations
+ * (naissance, décès, liens...) se renseignent ensuite depuis la fiche,
+ * exactement comme pour un individu importé.
+ */
+export async function createIndividual(treeId, { firstNames, lastName, sex } = {}) {
+  const { data, error } = await supabase
+    .from('individuals')
+    .insert({
+      tree_id: treeId,
+      first_names: firstNames?.trim() || null,
+      last_name: lastName?.trim() || null,
+      sex: sex || 'U',
+    })
+    .select('id, first_names, last_name')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ---------------------------------------------------------------------
 // Liens familiaux
 // ---------------------------------------------------------------------

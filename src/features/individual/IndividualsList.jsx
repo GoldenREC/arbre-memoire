@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { applyPrivacyRules } from '../../lib/utils/privacy.js';
 import { formatGenealogyDate } from '../../lib/utils/dates.js';
+import { createIndividual } from './individualMutations.js';
+import { pushErrorToast } from '../../store/useToastStore.js';
 
 /**
  * Liste simple des individus de l'arbre courant, avec le masquage des
@@ -13,9 +15,26 @@ import { formatGenealogyDate } from '../../lib/utils/dates.js';
  */
 export default function IndividualsList() {
   const { currentTreeId, role, privacyThresholdYears } = useAuthStore();
+  const navigate = useNavigate();
+  const canEdit = role === 'admin' || role === 'family';
   const [individuals, setIndividuals] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({ firstNames: '', lastName: '', sex: 'U' });
+  const [saving, setSaving] = useState(false);
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const created = await createIndividual(currentTreeId, createForm);
+      navigate(`/individus/${created.id}`);
+    } catch (err) {
+      pushErrorToast(err.message);
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!currentTreeId) return;
@@ -56,10 +75,58 @@ export default function IndividualsList() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="mb-1 text-xl font-semibold">Fiches individus</h1>
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold">Fiches individus</h1>
+        {canEdit && !creating && (
+          <button
+            onClick={() => setCreating(true)}
+            className="shrink-0 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700"
+          >
+            + Nouvel individu
+          </button>
+        )}
+      </div>
       <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
         {individuals.length} personne{individuals.length > 1 ? 's' : ''} dans l'arbre.
       </p>
+
+      {creating && (
+        <form onSubmit={handleCreate} className="mb-4 space-y-2 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              autoFocus
+              placeholder="Prénoms"
+              value={createForm.firstNames}
+              onChange={(e) => setCreateForm((f) => ({ ...f, firstNames: e.target.value }))}
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent-500 dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            <input
+              placeholder="Nom"
+              value={createForm.lastName}
+              onChange={(e) => setCreateForm((f) => ({ ...f, lastName: e.target.value }))}
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent-500 dark:border-neutral-700 dark:bg-neutral-900"
+            />
+          </div>
+          <select
+            value={createForm.sex}
+            onChange={(e) => setCreateForm((f) => ({ ...f, sex: e.target.value }))}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-accent-500 dark:border-neutral-700 dark:bg-neutral-900 sm:w-auto"
+          >
+            <option value="U">Sexe non précisé</option>
+            <option value="M">Masculin</option>
+            <option value="F">Féminin</option>
+          </select>
+          <p className="text-xs text-neutral-400">Date de naissance, lieu, famille... tout ça se renseigne ensuite depuis la fiche.</p>
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving} className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60">
+              {saving ? 'Création…' : 'Créer la fiche'}
+            </button>
+            <button type="button" onClick={() => setCreating(false)} className="rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              Annuler
+            </button>
+          </div>
+        </form>
+      )}
 
       <input
         placeholder="Rechercher un nom…"
