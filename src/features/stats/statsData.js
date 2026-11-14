@@ -30,7 +30,7 @@ export async function loadStatsBundle(treeId) {
     supabase.from('unions').select('id, union_type, status, start_date, start_date_precision, place_id'),
     supabase.from('union_partners').select('union_id, individual_id'),
     supabase.from('events').select('id, subject_kind, subject_id, event_type, event_date, date_precision, proof_level, place_id'),
-    supabase.from('citations').select('id, source_id, event_id'),
+    supabase.from('citations').select('id, source_id, event_id, transcription'),
     supabase.from('media').select('id, source_id, media_type'),
     supabase.from('places').select('id, raw_label, region, country'),
     supabase.from('media_face_tags').select('media_id, individual_id'),
@@ -96,7 +96,7 @@ export async function loadStatsBundle(treeId) {
   }));
 
   const mediaSourceIds = new Set((mediaRows || []).filter((m) => m.source_id).map((m) => m.source_id));
-  const citations = (citationRows || []).map((c) => ({ id: c.id, sourceId: c.source_id, eventId: c.event_id, hasMedia: mediaSourceIds.has(c.source_id) }));
+  const citations = (citationRows || []).map((c) => ({ id: c.id, sourceId: c.source_id, eventId: c.event_id, transcription: c.transcription, hasMedia: mediaSourceIds.has(c.source_id) }));
 
   const unionPartners = partnerRows || [];
   const partnersByUnion = new Map();

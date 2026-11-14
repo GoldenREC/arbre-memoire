@@ -61,8 +61,16 @@ async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, dat
       }
       return;
     }
+    // Tous les exemplaires de ce jalon, pas seulement le premier : une
+    // union héritée d'anciens doublons pouvait garder un "mariage"
+    // fantôme après être repassée "en couple".
     if (existing) {
-      const { error } = await supabase.from('events').delete().eq('id', existing.id);
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('subject_kind', 'union')
+        .eq('subject_id', unionId)
+        .eq('event_type', eventType);
       if (error) throw error;
     }
     return;

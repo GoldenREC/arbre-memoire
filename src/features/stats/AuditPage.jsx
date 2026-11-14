@@ -23,6 +23,8 @@ const KIND_LABELS = {
   duplicate_union_likely: 'Unions probablement en double',
   repeated_unique_event: 'Événement en double ou contradictoire',
   conflicting_sources: 'Preuves contradictoires',
+  duplicate_proofs: 'Preuve en double',
+  stale_union_event: 'Événement contraire au statut de l\'union',
   orphan: 'Fiche isolée',
 };
 
@@ -255,7 +257,7 @@ export default function AuditPage() {
                       {(f.kind === 'duplicate_union_exact' || f.kind === 'duplicate_union_likely') && (
                         <Link to="/unions" className="text-accent-600 hover:underline dark:text-accent-400">→ Revue des unions</Link>
                       )}
-                      {(f.kind === 'repeated_unique_event' || f.kind === 'conflicting_sources') && (
+                      {['repeated_unique_event', 'conflicting_sources', 'duplicate_proofs', 'stale_union_event'].includes(f.kind) && (
                         <button
                           onClick={() => setOpenFindingId(openFindingId === f.id ? null : f.id)}
                           aria-expanded={openFindingId === f.id}

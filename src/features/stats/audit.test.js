@@ -309,3 +309,41 @@ describe('detectConflictingSources', () => {
     )).toEqual([]);
   });
 });
+
+describe('detectStaleUnionEvents', () => {
+  const ctx = {
+    individualsById: new Map([['a', { id: 'a', firstNames: 'Loïck', lastName: 'T' }], ['b', { id: 'b', firstNames: 'Clémence', lastName: 'C' }]]),
+    partnersByUnion: new Map([['u1', ['a', 'b']], ['u2', ['a', 'b']]]),
+  };
+  const marriage = (unionId) => ({ id: `m-${unionId}`, subjectKind: 'union', subjectId: unionId, eventType: 'marriage', date: '2024-05-08' });
+
+  it("signale un mariage resté sur une union « en couple »", () => {
+    const findings = auditModule.detectStaleUnionEvents(
+      [{ id: 'u1', unionType: 'cohabitation', status: 'ongoing' }], [marriage('u1')], ctx
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].eventIds).toEqual(['m-u1']);
+    expect(findings[0].message).toContain('en couple');
+  });
+
+  it('ne signale rien pour une union mariée ou divorcée', () => {
+    expect(auditModule.detectStaleUnionEvents(
+      [{ id: 'u1', unionType: 'marriage', status: 'ongoing' }, { id: 'u2', unionType: 'marriage', status: 'divorced' }],
+      [marriage('u1'), marriage('u2'), { id: 'd', subjectKind: 'union', subjectId: 'u2', eventType: 'divorce' }], ctx
+    )).toEqual([]);
+  });
+});
+
+describe('detectConflictingSources — preuve en double', () => {
+  it('signale deux sources de même titre sur le même événement, même sans dépôt', () => {
+    const findings = auditModule.detectConflictingSources(
+      [{ id: 's1', title: 'Acte de naissance — Clémence Courtalin' }, { id: 's2', title: 'Acte de naissance — Clémence Courtalin' }],
+      [{ sourceId: 's1', eventId: 'e1' }, { sourceId: 's2', eventId: 'e1' }],
+      [{ id: 'e1', subjectKind: 'individual', subjectId: 'a', eventType: 'birth' }],
+      { individualsById: new Map([['a', { id: 'a' }]]), partnersByUnion: new Map() }
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].kind).toBe('duplicate_proofs');
+    expect(findings[0].sourceIds).toEqual(['s1', 's2']);
+  });
+});

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { describeEventVersions, keepEventVersion, versionChoices, bestProofLevel } from './auditCorrections.js';
+import { Link } from 'react-router-dom';
+import { describeEventVersions, keepEventVersion, versionChoices, bestProofLevel, deleteEvents } from './auditCorrections.js';
 import { deleteSource } from '../sources/sourcesMutations.js';
 import { PROOF_KIND_LABELS, proofKindOf } from '../sources/sourceFilters.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
@@ -41,6 +42,7 @@ function SourceLine({ source, canEdit, onDeleted }) {
           {source.hasMedia && <span className="ml-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">scan joint</span>}
         </p>
         <p className="text-neutral-400">{[source.repository, source.callNumber].filter(Boolean).join(' — ') || 'Aucune localisation renseignée'}</p>
+        {source.transcription && <p className="mt-0.5 italic text-neutral-500 dark:text-neutral-400">« {source.transcription} »</p>}
       </div>
       {canEdit && (
         <button onClick={handleDelete} disabled={busy} className="flex-none text-red-500 hover:text-red-700 disabled:opacity-60">
@@ -61,14 +63,68 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
   const [busyId, setBusyId] = useState(null);
   const [picks, setPicks] = useState({});
 
-  if (finding.kind === 'conflicting_sources') {
+  const [staleArmed, setStaleArmed] = useState(false);
+
+  if (finding.kind === 'stale_union_event') {
+    const { versions } = describeEventVersions(finding.eventIds, bundle);
+    async function handleDeleteStale() {
+      if (!staleArmed) {
+        setStaleArmed(true);
+        return;
+      }
+      setBusyId('stale');
+      try {
+        await deleteEvents(finding.eventIds);
+        pushToast('Événement supprimé.');
+        onChanged?.();
+      } catch (err) {
+        pushErrorToast(err.message || 'La suppression a échoué.');
+        setBusyId(null);
+        setStaleArmed(false);
+      }
+    }
+    return (
+      <div className="mt-2 space-y-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        {versions.map((v) => (
+          <div key={v.event.id} className="text-sm">
+            <p>
+              {v.date ? formatGenealogyDate({ date: v.date, datePrecision: v.datePrecision }) : 'Date inconnue'}
+              {v.placeLabel ? ` · ${v.placeLabel}` : ''}
+            </p>
+            <p className="text-xs text-neutral-400">
+              {v.sources.length ? `Preuves rattachées : ${v.sources.map((s) => s.title).join(' ; ')}` : 'Aucune preuve rattachée.'}
+            </p>
+          </div>
+        ))}
+        <p className="text-xs text-neutral-500">
+          Si le statut est juste, supprime cet événement. Si c'est le statut qui est faux, corrige-le dans la{' '}
+          <Link to="/unions" className="text-accent-600 hover:underline dark:text-accent-400">revue des unions</Link>.
+        </p>
+        {canEdit && (
+          <button onClick={handleDeleteStale} disabled={busyId !== null} className="text-sm text-red-500 hover:text-red-700 disabled:opacity-60">
+            {busyId === 'stale' ? 'Suppression…' : staleArmed ? 'Confirmer la suppression de cet événement' : 'Supprimer cet événement'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (finding.kind === 'conflicting_sources' || finding.kind === 'duplicate_proofs') {
     const sources = finding.sourceIds
       .map((id) => bundle.sources.find((s) => s.id === id))
       .filter(Boolean)
-      .map((s) => ({ ...s, hasMedia: bundle.citations.some((c) => c.sourceId === s.id && c.hasMedia) }));
+      .map((s) => ({
+        ...s,
+        hasMedia: bundle.citations.some((c) => c.sourceId === s.id && c.hasMedia),
+        transcription: bundle.citations.find((c) => c.sourceId === s.id && c.transcription)?.transcription || null,
+      }));
     return (
       <div className="mt-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-        <p className="mb-2 text-xs text-neutral-500">Supprime la source dont le dépôt est faux. L'autre reste rattachée à l'événement.</p>
+        <p className="mb-2 text-xs text-neutral-500">
+          {finding.kind === 'conflicting_sources'
+            ? "Supprime la source dont le dépôt est faux. L'autre reste rattachée à l'événement."
+            : 'Garde la plus complète et supprime les autres.'}
+        </p>
         <ul className="space-y-2">
           {sources.map((s) => <SourceLine key={s.id} source={s} canEdit={canEdit} onDeleted={onChanged} />)}
         </ul>

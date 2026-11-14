@@ -310,10 +310,12 @@ export function detectRepeatedUniqueEvents(events, { individualsById, partnersBy
 }
 
 /**
- * Preuves qui se contredisent : deux actes rattachés au même événement
- * avec le même titre et la même cote mais deux dépôts d'archives
- * différents — l'un des deux dépôts est forcément faux (souvent une
- * erreur de saisie ou d'import).
+ * Preuves en double ou qui se contredisent : deux sources de même titre
+ * rattachées au même événement. Si leurs dépôts d'archives diffèrent,
+ * l'un des deux est forcément faux (`conflicting_sources`) ; sinon ce
+ * sont deux exemplaires de la même preuve, dont un de trop
+ * (`duplicate_proofs`) — souvent un ancien import relancé avec un texte
+ * de transcription légèrement différent.
  */
 export function detectConflictingSources(sources, citations, events, { individualsById, partnersByUnion }) {
   const sourceById = new Map(sources.map((s) => [s.id, s]));
@@ -329,25 +331,72 @@ export function detectConflictingSources(sources, citations, events, { individua
   const norm = (v) => (v || '').trim().toLowerCase();
   const findings = [];
   for (const [eventId, map] of sourcesByEvent) {
-    const list = [...map.values()].filter((s) => norm(s.repository));
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i];
-        const b = list[j];
-        if (norm(a.title) !== norm(b.title) || norm(a.callNumber) !== norm(b.callNumber)) continue;
-        if (norm(a.repository) === norm(b.repository)) continue;
-        const event = eventById.get(eventId);
-        const individualIds = !event ? [] : event.subjectKind === 'individual' ? [event.subjectId] : partnersByUnion.get(event.subjectId) || [];
-        findings.push({
-          id: `conflicting-sources:${[a.id, b.id].sort().join(':')}`,
-          kind: 'conflicting_sources',
-          severity: 'medium',
-          message: `« ${a.title} » existe en deux exemplaires pour le même événement, avec deux dépôts différents : ${a.repository} et ${b.repository}. Supprime celui qui est faux dans Sources & preuves.`,
-          individualIds: individualIds.filter((id) => individualsById.has(id)),
-          sourceIds: [a.id, b.id],
-        });
-      }
+    const byTitle = new Map();
+    for (const s of map.values()) {
+      const key = `${norm(s.title)}|${norm(s.callNumber)}`;
+      if (!byTitle.has(key)) byTitle.set(key, []);
+      byTitle.get(key).push(s);
     }
+    for (const group of byTitle.values()) {
+      if (group.length < 2) continue;
+      const event = eventById.get(eventId);
+      const individualIds = (!event ? [] : event.subjectKind === 'individual' ? [event.subjectId] : partnersByUnion.get(event.subjectId) || [])
+        .filter((id) => individualsById.has(id));
+      const repositories = [...new Set(group.map((s) => norm(s.repository)).filter(Boolean))];
+      const conflicting = repositories.length > 1;
+      findings.push({
+        id: `${conflicting ? 'conflicting-sources' : 'duplicate-proofs'}:${group.map((s) => s.id).sort().join(':')}`,
+        kind: conflicting ? 'conflicting_sources' : 'duplicate_proofs',
+        severity: conflicting ? 'medium' : 'low',
+        message: conflicting
+          ? `« ${group[0].title} » existe en ${group.length} exemplaires pour le même événement, avec des dépôts différents : ${group.map((s) => s.repository).filter(Boolean).join(' et ')}. Supprime celui qui est faux.`
+          : `« ${group[0].title} » est rattachée ${group.length} fois au même événement. Garde la plus complète et supprime les autres.`,
+        individualIds,
+        sourceIds: group.map((s) => s.id),
+      });
+    }
+  }
+  return findings;
+}
+
+const STALE_EVENT_LABELS = { marriage: 'mariage', divorce: 'divorce' };
+
+/**
+ * Jalon d'union qui contredit le statut choisi : un événement "mariage"
+ * (ou "divorce") resté sur une union déclarée "en couple", ou un
+ * "divorce" sur une union "mariée". Il s'affiche encore dans la
+ * chronologie et sur la carte alors que le statut dit le contraire.
+ */
+export function detectStaleUnionEvents(unions, events, { individualsById, partnersByUnion }) {
+  const unionById = new Map(unions.map((u) => [u.id, u]));
+  const groups = new Map();
+  for (const e of events) {
+    if (e.subjectKind !== 'union' || !(e.eventType in STALE_EVENT_LABELS)) continue;
+    const u = unionById.get(e.subjectId);
+    if (!u) continue;
+    const divorced = u.status === 'divorced';
+    const married = u.unionType === 'marriage';
+    const allowed = e.eventType === 'marriage' ? married || divorced : divorced;
+    if (allowed) continue;
+    const key = `${u.id}:${e.eventType}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+  const findings = [];
+  for (const [key, group] of groups) {
+    const u = unionById.get(group[0].subjectId);
+    const individualIds = (partnersByUnion.get(u.id) || []).filter((id) => individualsById.has(id));
+    if (!individualIds.length) continue;
+    const who = individualIds.map((id) => fullName(individualsById.get(id))).join(' et ');
+    const status = u.unionType === 'marriage' ? 'mariée' : 'en couple';
+    findings.push({
+      id: `stale-union-event:${key}`,
+      kind: 'stale_union_event',
+      severity: 'medium',
+      message: `${who} : l'union est déclarée « ${status} », mais un événement « ${STALE_EVENT_LABELS[group[0].eventType]} » y est encore enregistré${group[0].date ? ` (${group[0].date})` : ''}.`,
+      individualIds,
+      eventIds: group.map((e) => e.id),
+    });
   }
   return findings;
 }
@@ -361,6 +410,7 @@ export function runFullAudit({ individuals, filiations, unions, partnersByUnion,
     ...detectDuplicateUnions(unions, partnersByUnion, individualsById),
     ...detectRepeatedUniqueEvents(events, { individualsById, partnersByUnion, placesById }),
     ...detectConflictingSources(sources, citations, events, { individualsById, partnersByUnion }),
+    ...detectStaleUnionEvents(unions, events, { individualsById, partnersByUnion }),
     ...detectOrphans(individuals, filiations, unionPartners),
   ];
   return findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);

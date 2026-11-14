@@ -21,7 +21,7 @@ function sourcesOfEvent(eventId, { citations, sources }) {
   for (const c of citations) {
     if (c.eventId !== eventId || seen.has(c.sourceId)) continue;
     const source = sourceById.get(c.sourceId);
-    if (source) seen.set(c.sourceId, { ...source, hasMedia: !!c.hasMedia });
+    if (source) seen.set(c.sourceId, { ...source, hasMedia: !!c.hasMedia, transcription: c.transcription || null });
   }
   return [...seen.values()];
 }
@@ -161,6 +161,12 @@ export async function keepEventVersion(keptEvent, otherEventIds, { syncRecord = 
     const { error } = await supabase.from(table).update(patch).eq('id', keepEvent.subjectId);
     if (error) throw error;
   }
+}
+
+/** Supprime des événements (leurs rattachements de preuves partent avec eux ; les sources elles-mêmes restent). */
+export async function deleteEvents(eventIds) {
+  const { error } = await supabase.from('events').delete().in('id', eventIds);
+  if (error) throw error;
 }
 
 /** Fusionne en série les doublons strictement identiques (aucun choix à faire). Retourne le nombre de constats traités. */
