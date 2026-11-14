@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient.js';
 import { addCitation } from './individualMutations.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 /**
  * Onglet "Sources & preuves" de la fiche : citations déjà liées
@@ -29,11 +30,16 @@ export default function SourcesTab({ individual, citations, treeId, canEdit, onC
   async function handleAdd(e) {
     e.preventDefault();
     if (!sourceId) return;
-    await addCitation(treeId, { individualId: individual.id, sourceId, transcription });
-    setAdding(false);
-    setTranscription('');
-    setSourceId('');
-    onChanged?.();
+    try {
+      await addCitation(treeId, { individualId: individual.id, sourceId, transcription });
+      setAdding(false);
+      setTranscription('');
+      setSourceId('');
+      onChanged?.();
+      pushToast('Source liée.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   return (

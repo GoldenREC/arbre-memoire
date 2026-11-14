@@ -4,6 +4,7 @@ import IndividualPicker from './IndividualPicker.jsx';
 import {
   addParentLink, addChildLink, removeFiliation, createUnion, removeUnion,
 } from './individualMutations.js';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 export const FILIATION_LABELS = {
   biological: 'Biologique',
@@ -74,13 +75,23 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
   const [filiationType, setFiliationType] = useState('biological');
 
   async function handleSelect(person) {
-    await addParentLink(treeId, individualId, person.id, filiationType);
-    setAdding(false);
-    onChanged?.();
+    try {
+      await addParentLink(treeId, individualId, person.id, filiationType);
+      setAdding(false);
+      onChanged?.();
+      pushToast('Parent ajouté.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
   async function handleRemove(filiationId) {
-    await removeFiliation(filiationId);
-    onChanged?.();
+    try {
+      await removeFiliation(filiationId);
+      onChanged?.();
+      pushToast('Lien retiré.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   return (
@@ -115,13 +126,23 @@ function UnionsBlock({ individualId, treeId, unions, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
 
   async function handleSelect(person) {
-    await createUnion(treeId, individualId, person.id, {});
-    setAdding(false);
-    onChanged?.();
+    try {
+      await createUnion(treeId, individualId, person.id, {});
+      setAdding(false);
+      onChanged?.();
+      pushToast('Union ajoutée.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
   async function handleRemove(unionId) {
-    await removeUnion(unionId);
-    onChanged?.();
+    try {
+      await removeUnion(unionId);
+      onChanged?.();
+      pushToast('Union retirée.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   return (
@@ -157,13 +178,23 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
   const allChildren = childGroups.flatMap((g) => g.children);
 
   async function handleSelect(person) {
-    await addChildLink(treeId, individualId, person.id, filiationType, unionId || null);
-    setAdding(false);
-    onChanged?.();
+    try {
+      await addChildLink(treeId, individualId, person.id, filiationType, unionId || null);
+      setAdding(false);
+      onChanged?.();
+      pushToast('Enfant ajouté.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
   async function handleRemove(filiationId) {
-    await removeFiliation(filiationId);
-    onChanged?.();
+    try {
+      await removeFiliation(filiationId);
+      onChanged?.();
+      pushToast('Lien retiré.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   return (
