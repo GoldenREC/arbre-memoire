@@ -229,7 +229,7 @@ export function detectDuplicateUnions(unions, partnersByUnion, individualsById, 
         kind: match.exact ? 'duplicate_union_exact' : 'duplicate_union_likely',
         severity: match.exact ? 'high' : 'medium',
         message: match.exact
-          ? `Deux unions distinctes partagent exactement les mêmes partenaires (${names}) — utilise le bouton "Nettoyer les événements en double" en haut de la page pour les fusionner.`
+          ? `Deux unions distinctes partagent exactement les mêmes partenaires (${names}) — utilise le bouton "Nettoyer les doublons" en haut de la page pour les fusionner.`
           : `Ces deux unions semblent concerner le même couple (${names}), probablement parce que l'un des deux conjoints a une fiche en double dans l'arbre — fusionner les fiches en double correspondantes réglera aussi ce doublon d'union.`,
         individualIds: [...new Set([...idsA, ...idsB])],
         unionIds: [uA.id, uB.id],

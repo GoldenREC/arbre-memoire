@@ -65,6 +65,34 @@ export async function detachCitation(citationId) {
   if (error) throw error;
 }
 
+const sameText = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+
+/** Source déjà citée par cet événement et identique au candidat (titre, type, lien, dépôt, cote), ou null. */
+async function findIdenticalSourceForEvent(eventId, candidate) {
+  const { data: citations, error } = await supabase.from('citations').select('source_id').eq('event_id', eventId);
+  if (error) throw error;
+  const sourceIds = [...new Set((citations || []).map((c) => c.source_id).filter(Boolean))];
+  for (const sourceId of sourceIds) {
+    const { data: source, error: sErr } = await supabase
+      .from('sources')
+      .select('id, title, source_type, url, repository, call_number')
+      .eq('id', sourceId)
+      .maybeSingle();
+    if (sErr) throw sErr;
+    if (
+      source &&
+      sameText(source.title, candidate.title) &&
+      (source.source_type || null) === (candidate.sourceType || null) &&
+      sameText(source.url, candidate.url) &&
+      sameText(source.repository, candidate.repository) &&
+      sameText(source.call_number, candidate.callNumber)
+    ) {
+      return source.id;
+    }
+  }
+  return null;
+}
+
 /**
  * Enregistre la preuve d'une date exacte (naissance/décès) saisie
  * directement depuis le formulaire de fiche (création ou édition),
@@ -91,13 +119,26 @@ export async function detachCitation(citationId) {
 export async function attachDateProof(treeId, { subjectKind = 'individual', subjectId, individualId, eventType, snapshot, title, proof }) {
   const eventId = await ensureEvent(treeId, subjectKind, subjectId, eventType, snapshot);
   const sourceType = proof.type === 'family' ? 'family_data' : 'civil_record';
-  const sourceId = await createSource(treeId, {
+  const candidate = {
     title,
     sourceType,
     url: proof.url?.trim() || null,
     repository: proof.repository?.trim() || null,
     callNumber: proof.reference?.trim() || null,
-  });
+  };
+
+  // Pas de source en double : si cet événement cite déjà une source
+  // identique (cas d'un ré-import du même fichier), on la réutilise au
+  // lieu d'en créer une jumelle. Un nouveau scan s'y ajoute simplement.
+  const existingSourceId = await findIdenticalSourceForEvent(eventId, candidate);
+  if (existingSourceId) {
+    if (proof.file) {
+      await uploadMediaFile(treeId, proof.file, { mediaType: 'document', sourceId: existingSourceId, title: proof.file.name, folder: 'actes' });
+    }
+    return { eventId, sourceId: existingSourceId, reused: true };
+  }
+
+  const sourceId = await createSource(treeId, candidate);
   if (proof.file) {
     await uploadMediaFile(treeId, proof.file, { mediaType: 'document', sourceId, title: proof.file.name, folder: 'actes' });
   }

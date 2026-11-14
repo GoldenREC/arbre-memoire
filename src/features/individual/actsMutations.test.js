@@ -146,3 +146,31 @@ describe('attachDateProof', () => {
     expect(mock.tables.events.filter((e) => e.subject_id === 'ind-3')).toHaveLength(1);
   });
 });
+
+describe('attachDateProof — pas de source en double', () => {
+  it("réutilise la source identique déjà citée par l'événement au lieu d'en créer une jumelle", async () => {
+    mock = makeSupabaseMock();
+    const { attachDateProof } = await import('./actsMutations.js');
+    const args = {
+      subjectId: 'ind-1', individualId: 'ind-1', eventType: 'death',
+      snapshot: { date: '1979-02-25', datePrecision: 'exact', placeId: null },
+      title: 'Acte de décès — Charles Ternay',
+      proof: { type: 'family', url: '', file: null },
+    };
+    const first = await attachDateProof('tree-1', args);
+    const second = await attachDateProof('tree-1', args);
+    expect(second.sourceId).toBe(first.sourceId);
+    expect(second.reused).toBe(true);
+    expect(mock.tables.sources).toHaveLength(1);
+    expect(mock.tables.citations).toHaveLength(1);
+  });
+
+  it('crée bien une nouvelle source quand la preuve diffère', async () => {
+    mock = makeSupabaseMock();
+    const { attachDateProof } = await import('./actsMutations.js');
+    const base = { subjectId: 'ind-1', individualId: 'ind-1', eventType: 'death', snapshot: {}, title: 'Acte de décès — Charles Ternay' };
+    await attachDateProof('tree-1', { ...base, proof: { type: 'family', url: '', file: null } });
+    await attachDateProof('tree-1', { ...base, proof: { type: 'acte', url: 'https://archives.example.org/acte', file: null } });
+    expect(mock.tables.sources).toHaveLength(2);
+  });
+});
