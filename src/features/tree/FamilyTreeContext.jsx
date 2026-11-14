@@ -15,6 +15,10 @@ export function FamilyTreeProvider({ treeId, children }) {
   const defaultRootIndividualId = useAuthStore((s) => s.preferences?.defaultRootIndividualId);
   const [rootId, setRootId] = useState(null);
   const [generations, setGenerations] = useState(5);
+  // 'horizontal' (gauche → droite, par défaut) ou 'vertical' (haut → bas) —
+  // ne concerne que la vue Ascendance (voir AscendancyView.jsx) ; partagé
+  // ici pour que le choix survive si l'utilisateur change d'onglet.
+  const [orientation, setOrientation] = useState('horizontal');
 
   // Dès que le graphe est chargé, on choisit une racine par défaut si
   // aucune n'a encore été choisie dans cette session : la fiche "De
@@ -40,6 +44,8 @@ export function FamilyTreeProvider({ treeId, children }) {
     setRootId,
     generations,
     setGenerations,
+    orientation,
+    setOrientation,
   };
 
   return <FamilyTreeContext.Provider value={value}>{children}</FamilyTreeContext.Provider>;
