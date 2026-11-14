@@ -301,6 +301,9 @@ export function detectRepeatedUniqueEvents(events, { individualsById, partnersBy
         ? `${who} : ${group.length} événements « ${UNIQUE_EVENT_LABELS[first.eventType]} » qui se contredisent (${versions.join(' ; ')}). Un seul peut être juste.`
         : `${who} : l'événement « ${UNIQUE_EVENT_LABELS[first.eventType]} » est enregistré ${group.length} fois à l'identique (${versions[0]}).`,
       individualIds,
+      // Pour la correction en un clic depuis l'Audit (auditCorrections.js).
+      eventIds: group.map((e) => e.id),
+      identical: !conflicting,
     });
   }
   return findings;
@@ -341,6 +344,7 @@ export function detectConflictingSources(sources, citations, events, { individua
           severity: 'medium',
           message: `« ${a.title} » existe en deux exemplaires pour le même événement, avec deux dépôts différents : ${a.repository} et ${b.repository}. Supprime celui qui est faux dans Sources & preuves.`,
           individualIds: individualIds.filter((id) => individualsById.has(id)),
+          sourceIds: [a.id, b.id],
         });
       }
     }

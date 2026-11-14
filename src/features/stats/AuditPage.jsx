@@ -8,6 +8,9 @@ import Meter from './charts/Meter.jsx';
 import MergeDuplicateDialog from './MergeDuplicateDialog.jsx';
 import SuggestionsPanel from './SuggestionsPanel.jsx';
 import { cleanupTreeEventDuplicates } from './cleanupDuplicates.js';
+import AuditResolver from './AuditResolver.jsx';
+import { pushToast } from '../../store/useToastStore.js';
+import { mergeIdenticalFindings } from './auditCorrections.js';
 
 const KIND_LABELS = {
   death_before_birth: 'Décès avant naissance',
@@ -56,6 +59,10 @@ export default function AuditPage() {
   const [severityFilter, setSeverityFilter] = useState(null);
   const [mergeCandidate, setMergeCandidate] = useState(null); // { aId, bId } | null
   const [cleanup, setCleanup] = useState({ running: false, result: null, error: null });
+  const [openFindingId, setOpenFindingId] = useState(null);
+  const [bulkMerge, setBulkMerge] = useState({ running: false, done: 0, error: null });
+  const role = useAuthStore((s) => s.role);
+  const canEdit = role === 'admin' || role === 'family';
 
   const reload = useCallback(() => {
     if (!currentTreeId) return;
@@ -112,6 +119,22 @@ export default function AuditPage() {
   }, [findings]);
 
   const visibleFindings = severityFilter ? findings.filter((f) => f.severity === severityFilter) : findings;
+
+  const identicalFindings = findings.filter((f) => f.kind === 'repeated_unique_event' && f.identical);
+
+  // Doublons strictement identiques : aucun choix à faire, on les fusionne
+  // tous d'un coup (l'exemplaire le mieux prouvé est gardé, les preuves suivent).
+  async function handleMergeIdentical() {
+    setBulkMerge({ running: true, done: 0, error: null });
+    try {
+      await mergeIdenticalFindings(identicalFindings, state.bundle, (done) => setBulkMerge((b) => ({ ...b, done })));
+      setBulkMerge({ running: false, done: 0, error: null });
+      pushToast('Doublons identiques fusionnés.');
+    } catch (err) {
+      setBulkMerge({ running: false, done: 0, error: err.message || 'La fusion a échoué.' });
+    }
+    reload();
+  }
 
   async function handleCleanupDuplicates() {
     if (!currentTreeId) return;
@@ -192,6 +215,22 @@ export default function AuditPage() {
           </div>
         </div>
 
+        {canEdit && identicalFindings.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+            <span className="min-w-0 flex-1 text-neutral-600 dark:text-neutral-300">
+              {identicalFindings.length} événement{identicalFindings.length > 1 ? 's sont enregistrés' : ' est enregistré'} plusieurs fois à l'identique : aucun choix à faire.
+            </span>
+            <button
+              onClick={handleMergeIdentical}
+              disabled={bulkMerge.running}
+              className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+            >
+              {bulkMerge.running ? `Fusion… ${bulkMerge.done}/${identicalFindings.length}` : 'Fusionner tous les doublons identiques'}
+            </button>
+            {bulkMerge.error && <span className="w-full text-xs text-red-500">{bulkMerge.error}</span>}
+          </div>
+        )}
+
         {visibleFindings.length === 0 ? (
           <p className="text-sm text-neutral-400">Aucun constat pour ce filtre — bon signe !</p>
         ) : (
@@ -215,6 +254,15 @@ export default function AuditPage() {
                       {(f.kind === 'duplicate_union_exact' || f.kind === 'duplicate_union_likely') && (
                         <Link to="/unions" className="text-accent-600 hover:underline dark:text-accent-400">→ Revue des unions</Link>
                       )}
+                      {(f.kind === 'repeated_unique_event' || f.kind === 'conflicting_sources') && (
+                        <button
+                          onClick={() => setOpenFindingId(openFindingId === f.id ? null : f.id)}
+                          aria-expanded={openFindingId === f.id}
+                          className="rounded-full bg-accent-600 px-2 py-0.5 font-medium text-white hover:bg-accent-700"
+                        >
+                          {openFindingId === f.id ? 'Fermer' : 'Corriger'}
+                        </button>
+                      )}
                       {f.kind === 'potential_duplicate' && (
                         <button
                           onClick={() => setMergeCandidate({ aId: f.individualIds[0], bId: f.individualIds[1] })}
@@ -224,6 +272,9 @@ export default function AuditPage() {
                         </button>
                       )}
                     </div>
+                    {openFindingId === f.id && (
+                      <AuditResolver finding={f} bundle={state.bundle} canEdit={canEdit} onChanged={() => { setOpenFindingId(null); reload(); }} />
+                    )}
                   </div>
                 </li>
               );
