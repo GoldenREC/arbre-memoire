@@ -14,7 +14,7 @@ const MERGEABLE_FIELDS = [
   'isDeceased', 'occupation', 'biography',
 ];
 
-function mergeField(fieldName, existingValue, incomingValue) {
+export function mergeField(fieldName, existingValue, incomingValue) {
   const a = existingValue ?? null;
   const b = incomingValue ?? null;
 
@@ -70,4 +70,51 @@ export function applyConflictResolutions(mergeResult, resolutions) {
     final[conflict.field] = choice === 'incoming' ? conflict.incomingValue : conflict.existingValue;
   }
   return final;
+}
+
+// ---------------------------------------------------------------------
+// Fusion de deux fiches DÉJÀ enregistrées en base (déclenchée depuis
+// Audit → "Doublon potentiel"), par opposition à mergeIndividuals()
+// ci-dessus qui fusionne une fiche existante avec une fiche entrante
+// venant d'un import GEDCOM pas encore écrite. Les lieux
+// (birthPlaceId/deathPlaceId) ne sont volontairement pas dans la liste
+// des champs fusionnables : ce sont des UUID, pas des libellés
+// affichables, donc on garde toujours ceux de la fiche conservée (la
+// fiche individu permet de corriger le lieu normalement après coup).
+// Le nettoyage des relations (filiations, unions, médias...) et la
+// suppression du doublon se font côté base via le RPC
+// merge_individuals (supabase/merge.sql), appelé après l'écriture du
+// résultat de cette fusion de champs — voir mergeDuplicates.js.
+// ---------------------------------------------------------------------
+
+const LIVE_MERGEABLE_FIELDS = [
+  'firstNames', 'lastName', 'birthName', 'sex',
+  'birthDate', 'birthDatePrecision',
+  'deathDate', 'deathDatePrecision',
+  'isDeceased', 'occupation', 'biography',
+];
+
+/**
+ * Fusionne deux fiches individu vivantes en base. `a` est la fiche
+ * conservée par défaut en cas de conflit (`kept`), `b` la fiche qui
+ * sera supprimée (`removed`). Même forme de retour que
+ * mergeIndividuals() : { merged, conflicts }.
+ */
+export function mergeLiveIndividuals(kept, removed) {
+  const merged = { ...kept };
+  const conflicts = [];
+
+  for (const field of LIVE_MERGEABLE_FIELDS) {
+    const result = mergeField(field, kept[field], removed[field]);
+    merged[field] = result.value;
+    if (result.conflict) {
+      conflicts.push({ field, existingValue: kept[field], incomingValue: removed[field] });
+    }
+  }
+
+  if (kept.biography && removed.biography && kept.biography !== removed.biography) {
+    merged.biography = `${kept.biography}\n\n--- Fiche fusionnée ---\n${removed.biography}`;
+  }
+
+  return { merged, conflicts };
 }

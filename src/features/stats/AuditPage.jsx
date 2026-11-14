@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { loadStatsBundle, bulkNmdStatus } from './statsData.js';
 import { runFullAudit } from './auditEngine.js';
 import { severityStatus } from './chartColors.js';
 import Meter from './charts/Meter.jsx';
+import MergeDuplicateDialog from './MergeDuplicateDialog.jsx';
 
 const KIND_LABELS = {
   death_before_birth: 'Décès avant naissance',
@@ -47,16 +48,19 @@ export default function AuditPage() {
   const { currentTreeId } = useAuthStore();
   const [state, setState] = useState({ loading: true, error: null, bundle: null });
   const [severityFilter, setSeverityFilter] = useState(null);
+  const [mergeCandidate, setMergeCandidate] = useState(null); // { aId, bId } | null
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!currentTreeId) return;
-    let cancelled = false;
     setState((s) => ({ ...s, loading: true, error: null }));
     loadStatsBundle(currentTreeId)
-      .then((bundle) => { if (!cancelled) setState({ loading: false, error: null, bundle }); })
-      .catch((err) => { if (!cancelled) setState({ loading: false, error: err.message || 'Erreur de chargement.', bundle: null }); });
-    return () => { cancelled = true; };
+      .then((bundle) => setState({ loading: false, error: null, bundle }))
+      .catch((err) => setState({ loading: false, error: err.message || 'Erreur de chargement.', bundle: null }));
   }, [currentTreeId]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const individualsById = useMemo(() => (state.bundle ? new Map(state.bundle.individuals.map((i) => [i.id, i])) : null), [state.bundle]);
 
@@ -160,13 +164,21 @@ export default function AuditPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-neutral-700 dark:text-neutral-200">{f.message}</p>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-neutral-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                       <span>{KIND_LABELS[f.kind] || f.kind}</span>
                       {f.individualIds.map((id) => (
                         <Link key={id} to={`/individus/${id}`} className="text-accent-600 hover:underline dark:text-accent-400">
                           → {fullName(individualsById.get(id))}
                         </Link>
                       ))}
+                      {f.kind === 'potential_duplicate' && (
+                        <button
+                          onClick={() => setMergeCandidate({ aId: f.individualIds[0], bId: f.individualIds[1] })}
+                          className="rounded-full bg-accent-600 px-2 py-0.5 font-medium text-white hover:bg-accent-700"
+                        >
+                          Fusionner
+                        </button>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -175,6 +187,16 @@ export default function AuditPage() {
           </ul>
         )}
       </div>
+
+      {mergeCandidate && (
+        <MergeDuplicateDialog
+          treeId={currentTreeId}
+          aId={mergeCandidate.aId}
+          bId={mergeCandidate.bId}
+          onClose={() => setMergeCandidate(null)}
+          onMerged={() => { setMergeCandidate(null); reload(); }}
+        />
+      )}
     </div>
   );
 }
