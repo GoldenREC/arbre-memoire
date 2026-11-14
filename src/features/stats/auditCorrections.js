@@ -63,6 +63,24 @@ export function describeEventVersions(eventIds, bundle) {
   };
 }
 
+/** Niveau de preuve le plus solide parmi les versions : les preuves suivant la version gardée, elle en hérite. */
+export function bestProofLevel(versions) {
+  return [...versions].map((v) => v.proofLevel).filter(Boolean).sort((a, b) => (PROOF_RANK[a] || 9) - (PROOF_RANK[b] || 9))[0] || null;
+}
+
+/** Choix distincts de date et de lieu proposés à l'écran, tirés de toutes les versions. */
+export function versionChoices(versions) {
+  const dates = new Map();
+  const places = new Map();
+  for (const v of versions) {
+    const dateKey = `${v.date || ''}|${v.datePrecision}`;
+    if (!dates.has(dateKey)) dates.set(dateKey, { key: dateKey, date: v.date, datePrecision: v.datePrecision });
+    const placeKey = v.placeLabel || '';
+    if (!places.has(placeKey)) places.set(placeKey, { key: placeKey, placeId: v.event.placeId || null, label: v.placeLabel });
+  }
+  return { dates: [...dates.values()], places: [...places.values()] };
+}
+
 /** Meilleure version à garder par défaut : celle de la fiche, sinon la mieux prouvée, sinon la plus sourcée. */
 export function pickBestEvent(versions) {
   return [...versions].sort(
@@ -78,7 +96,23 @@ export function pickBestEvent(versions) {
  * sont rattachées à l'événement gardé (les copies exactes sont réduites à
  * une), puis la fiche est alignée si `syncRecord` est vrai.
  */
-export async function keepEventVersion(keepEvent, otherEventIds, { syncRecord = true } = {}) {
+export async function keepEventVersion(keptEvent, otherEventIds, { syncRecord = true, overrides = null } = {}) {
+  // `overrides` : { date, datePrecision, placeId, proofLevel } choisis à
+  // l'écran parmi les autres versions (ex. garder la version qui porte
+  // l'acte, mais avec le lieu d'une autre) — appliqués à l'événement gardé.
+  const keepEvent = overrides ? { ...keptEvent, ...overrides } : keptEvent;
+  if (overrides) {
+    const { error: updErr } = await supabase
+      .from('events')
+      .update({
+        event_date: keepEvent.date || null,
+        date_precision: keepEvent.datePrecision || 'unknown',
+        place_id: keepEvent.placeId || null,
+        ...(keepEvent.proofLevel ? { proof_level: keepEvent.proofLevel } : {}),
+      })
+      .eq('id', keepEvent.id);
+    if (updErr) throw updErr;
+  }
   const others = otherEventIds.filter((id) => id !== keepEvent.id);
   if (others.length) {
     const { error: moveErr } = await supabase.from('citations').update({ event_id: keepEvent.id }).in('event_id', others);

@@ -46,3 +46,15 @@ describe('pickBestEvent', () => {
     expect(pickBestEvent(describeEventVersions(['e1', 'e2'], b).versions).event.id).toBe('e1');
   });
 });
+
+describe('versionChoices / bestProofLevel', () => {
+  it('propose chaque lieu et chaque date une seule fois, et le meilleur niveau de preuve', async () => {
+    const { versionChoices, bestProofLevel } = await import('./auditCorrections.js');
+    const { versions } = describeEventVersions(['e1', 'e2'], bundle());
+    const choices = versionChoices(versions);
+    expect(choices.places.map((p) => p.label)).toEqual(['Châteauneuf-la-Forêt', 'Châteauponsac']);
+    expect(choices.places[1].placeId).toBe('p1');
+    expect(choices.dates).toHaveLength(1);
+    expect(bestProofLevel(versions)).toBe('proven_original');
+  });
+});

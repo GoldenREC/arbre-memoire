@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { describeEventVersions, keepEventVersion } from './auditCorrections.js';
+import { describeEventVersions, keepEventVersion, versionChoices, bestProofLevel } from './auditCorrections.js';
 import { deleteSource } from '../sources/sourcesMutations.js';
 import { PROOF_KIND_LABELS, proofKindOf } from '../sources/sourceFilters.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
@@ -59,6 +59,7 @@ function SourceLine({ source, canEdit, onDeleted }) {
  */
 export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
   const [busyId, setBusyId] = useState(null);
+  const [picks, setPicks] = useState({});
 
   if (finding.kind === 'conflicting_sources') {
     const sources = finding.sourceIds
@@ -76,11 +77,29 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
   }
 
   const { versions, differs } = describeEventVersions(finding.eventIds, bundle);
+  const choices = versionChoices(versions);
+  // Par version : la date et le lieu qu'elle aura une fois gardée (les
+  // siens par défaut, ou ceux d'une autre version choisis dans la liste).
+  const picked = (v) => ({
+    dateKey: picks[v.event.id]?.dateKey ?? `${v.date || ''}|${v.datePrecision}`,
+    placeKey: picks[v.event.id]?.placeKey ?? (v.placeLabel || ''),
+  });
+  const setPick = (v, patch) => setPicks((p) => ({ ...p, [v.event.id]: { ...picked(v), ...patch } }));
 
   async function handleKeep(version) {
     setBusyId(version.event.id);
     try {
-      await keepEventVersion(version.event, finding.eventIds);
+      const { dateKey, placeKey } = picked(version);
+      const date = choices.dates.find((d) => d.key === dateKey);
+      const place = choices.places.find((p) => p.key === placeKey);
+      await keepEventVersion(version.event, finding.eventIds, {
+        overrides: {
+          date: date?.date || null,
+          datePrecision: date?.datePrecision || 'unknown',
+          placeId: place?.placeId || null,
+          proofLevel: bestProofLevel(versions),
+        },
+      });
       pushToast('Version conservée, les autres exemplaires sont supprimés.');
       onChanged?.();
     } catch (err) {
@@ -94,7 +113,7 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
       <p className="text-xs text-neutral-500">
         Choisis la bonne version : les autres exemplaires sont supprimés, leurs preuves sont rattachées à celle que tu gardes
         {versions[0]?.event.eventType === 'marriage' ? '.' : ' et la fiche est mise à jour avec sa date et son lieu.'}
-        {(differs.date || differs.place) && ' Ce qui diffère est surligné.'}
+        {(differs.date || differs.place) && ' Quand la date ou le lieu diffèrent, une liste te laisse choisir lequel garder avant de valider.'}
       </p>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {versions.map((v) => (
@@ -102,11 +121,29 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
             <dl className="space-y-1 text-sm">
               <div>
                 <dt className="text-[10px] uppercase tracking-wide text-neutral-400">Date</dt>
-                <dd><span className={differs.date ? diffClass : ''}>{v.date ? formatGenealogyDate({ date: v.date, datePrecision: v.datePrecision }) : 'Inconnue'}</span></dd>
+                <dd>
+                  {canEdit && differs.date ? (
+                    <select className="field" aria-label="Date à garder" value={picked(v).dateKey} onChange={(e) => setPick(v, { dateKey: e.target.value })}>
+                      {choices.dates.map((d) => (
+                        <option key={d.key} value={d.key}>{d.date ? formatGenealogyDate({ date: d.date, datePrecision: d.datePrecision }) : 'Inconnue'}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={differs.date ? diffClass : ''}>{v.date ? formatGenealogyDate({ date: v.date, datePrecision: v.datePrecision }) : 'Inconnue'}</span>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-[10px] uppercase tracking-wide text-neutral-400">Lieu</dt>
-                <dd><span className={differs.place ? diffClass : ''}>{v.placeLabel || 'Inconnu'}</span></dd>
+                <dd>
+                  {canEdit && differs.place ? (
+                    <select className="field" aria-label="Lieu à garder" value={picked(v).placeKey} onChange={(e) => setPick(v, { placeKey: e.target.value })}>
+                      {choices.places.map((p) => <option key={p.key} value={p.key}>{p.label || 'Inconnu'}</option>)}
+                    </select>
+                  ) : (
+                    <span className={differs.place ? diffClass : ''}>{v.placeLabel || 'Inconnu'}</span>
+                  )}
+                </dd>
               </div>
             </dl>
             <div className="mt-2 flex flex-wrap gap-1.5">
