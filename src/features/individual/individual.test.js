@@ -1,7 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import { computeNmdStatus } from './nmdStatus.js';
+import { splitName } from './IndividualPicker.jsx';
 
 const individual = { id: 'ind-1', firstNames: 'Jean', lastName: 'Dupont' };
+
+describe('splitName', () => {
+  it('sépare le dernier mot comme nom, le reste comme prénoms', () => {
+    expect(splitName('Jean Pierre Dupont')).toEqual({ firstNames: 'Jean Pierre', lastName: 'Dupont' });
+  });
+
+  it('traite un mot unique comme un nom de famille, sans prénom', () => {
+    expect(splitName('Dupont')).toEqual({ firstNames: '', lastName: 'Dupont' });
+  });
+
+  it('ignore les espaces superflus', () => {
+    expect(splitName('  Marie   Curie  ')).toEqual({ firstNames: 'Marie', lastName: 'Curie' });
+  });
+
+  it('renvoie des chaînes vides pour une saisie vide', () => {
+    expect(splitName('')).toEqual({ firstNames: '', lastName: '' });
+  });
+});
 
 describe('computeNmdStatus', () => {
   it('ignore un acte sans média (citation sans image réellement jointe)', () => {
