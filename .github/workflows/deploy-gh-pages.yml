@@ -21,6 +21,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Au niveau du job plutôt que d'une seule étape : les tests unitaires
+    # importent src/lib/supabaseClient.js (même indirectement), qui sinon
+    # retombe sur un placeholder et log un avertissement "variables
+    # manquantes" dans les logs CI. Aucun test actuel n'appelle Supabase en
+    # réseau, donc ça ne changeait rien au résultat — mais autant leur donner
+    # les vraies valeurs pour des logs propres et rester correct si un futur
+    # test en avait besoin.
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
@@ -44,8 +54,6 @@ jobs:
       - name: Construire le site (base GitHub Pages)
         env:
           VITE_BASE_PATH: /arbre-memoire/
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Copier index.html en 404.html
