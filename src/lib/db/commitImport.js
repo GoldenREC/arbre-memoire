@@ -97,37 +97,122 @@ async function upsertIndividuals(individuals, treeId, importBatchId, placeIdMap)
   return map;
 }
 
-async function insertUnions(families, treeId, placeIdMap) {
-  const map = new Map();
-  if (!families.length) return map;
-
-  const rows = families.map((f) => ({
-    tree_id: treeId,
-    union_type: f.unionType ?? 'unknown',
-    status: f.status ?? 'unknown',
-    start_date: f.startDate ?? null,
-    start_date_precision: f.startDatePrecision ?? 'unknown',
-    end_date: f.endDate ?? null,
-    end_date_precision: f.endDatePrecision ?? 'unknown',
-    place_id: f.placeLocalId ? placeIdMap.get(f.placeLocalId) ?? null : null,
-    gedcom_xref: f.gedcomXref ?? null,
-  }));
-  const { data, error } = await supabase.from('unions').insert(rows).select('id');
-  if (error) throw error;
-  data.forEach((row, i) => map.set(families[i].localId, row.id));
-  return map;
+/**
+ * Clé de déduplication d'une union : la liste triée des ids réels (déjà
+ * résolus via individualIdMap) de ses partenaires. Deux familles qui
+ * partagent exactement les mêmes partenaires sont la même union, même si
+ * elles viennent de deux enregistrements FAM distincts (cas fréquent des
+ * GEDCOM de corrélation multi-sources, qui dupliquent un même mariage).
+ * Retourne null quand aucun partenaire n'est résolu (rien à dédupliquer).
+ */
+export function partnersKey(f, individualIdMap) {
+  const ids = [];
+  if (f.husbandLocalId && individualIdMap.has(f.husbandLocalId)) {
+    ids.push(individualIdMap.get(f.husbandLocalId));
+  }
+  if (f.wifeLocalId && individualIdMap.has(f.wifeLocalId)) {
+    ids.push(individualIdMap.get(f.wifeLocalId));
+  }
+  if (!ids.length) return null;
+  return ids.slice().sort().join(',');
 }
 
-async function insertUnionPartners(families, unionIdMap, individualIdMap) {
+/**
+ * Unions déjà en base pour cet arbre : une map clé-de-partenaires -> union id,
+ * et l'ensemble des paires (union_id, individual_id) déjà présentes dans
+ * union_partners (pour ne jamais retenter d'insérer une paire existante —
+ * la table a une clé primaire composite sur ces deux colonnes).
+ */
+async function fetchExistingUnionPartners(treeId) {
+  const { data, error } = await supabase
+    .from('union_partners')
+    .select('union_id, individual_id, unions!inner(tree_id)')
+    .eq('unions.tree_id', treeId);
+  if (error) throw error;
+
+  const partnersByUnion = new Map();
+  const existingPairs = new Set();
+  for (const row of data || []) {
+    if (!partnersByUnion.has(row.union_id)) partnersByUnion.set(row.union_id, []);
+    partnersByUnion.get(row.union_id).push(row.individual_id);
+    existingPairs.add(`${row.union_id}:${row.individual_id}`);
+  }
+  const keyToUnionId = new Map();
+  for (const [unionId, partnerIds] of partnersByUnion) {
+    const key = partnerIds.slice().sort().join(',');
+    if (key) keyToUnionId.set(key, unionId);
+  }
+  return { keyToUnionId, existingPairs };
+}
+
+async function insertUnions(families, treeId, placeIdMap, individualIdMap) {
+  const map = new Map();
+  if (!families.length) return { map, existingPairs: new Set() };
+
+  // Dédoublonnage : une union avec les mêmes partenaires déjà présente
+  // dans l'arbre (import précédent) ou répétée plusieurs fois dans CE
+  // même import (fragments FAM dupliqués) n'est jamais réinsérée.
+  const { keyToUnionId: existingByKey, existingPairs } = await fetchExistingUnionPartners(treeId);
+  const batchPrimaryByKey = new Map(); // clé -> localId de la famille "maîtresse" de ce batch
+  const duplicateOf = new Map(); // localId du doublon -> localId de la famille maîtresse
+
+  const toInsert = [];
+  const toInsertFamilies = [];
+
+  for (const f of families) {
+    const key = partnersKey(f, individualIdMap);
+    if (key && existingByKey.has(key)) {
+      map.set(f.localId, existingByKey.get(key));
+      continue;
+    }
+    if (key && batchPrimaryByKey.has(key)) {
+      duplicateOf.set(f.localId, batchPrimaryByKey.get(key));
+      continue;
+    }
+    if (key) batchPrimaryByKey.set(key, f.localId);
+    toInsertFamilies.push(f);
+    toInsert.push({
+      tree_id: treeId,
+      union_type: f.unionType ?? 'unknown',
+      status: f.status ?? 'unknown',
+      start_date: f.startDate ?? null,
+      start_date_precision: f.startDatePrecision ?? 'unknown',
+      end_date: f.endDate ?? null,
+      end_date_precision: f.endDatePrecision ?? 'unknown',
+      place_id: f.placeLocalId ? placeIdMap.get(f.placeLocalId) ?? null : null,
+      gedcom_xref: f.gedcomXref ?? null,
+    });
+  }
+
+  if (toInsert.length) {
+    const { data, error } = await supabase.from('unions').insert(toInsert).select('id');
+    if (error) throw error;
+    data.forEach((row, i) => map.set(toInsertFamilies[i].localId, row.id));
+  }
+
+  for (const [dupLocalId, primaryLocalId] of duplicateOf) {
+    map.set(dupLocalId, map.get(primaryLocalId));
+  }
+
+  return { map, existingPairs };
+}
+
+async function insertUnionPartners(families, unionIdMap, individualIdMap, existingPairs) {
   const rows = [];
+  const seen = new Set(existingPairs); // "unionId:individualId" déjà présents en base,
+                                        // ou déjà ajoutés ici — jamais réinsérés (clé primaire composite).
   for (const f of families) {
     const unionId = unionIdMap.get(f.localId);
-    if (f.husbandLocalId && individualIdMap.has(f.husbandLocalId)) {
-      rows.push({ union_id: unionId, individual_id: individualIdMap.get(f.husbandLocalId) });
-    }
-    if (f.wifeLocalId && individualIdMap.has(f.wifeLocalId)) {
-      rows.push({ union_id: unionId, individual_id: individualIdMap.get(f.wifeLocalId) });
-    }
+    const add = (localId) => {
+      if (!localId || !individualIdMap.has(localId)) return;
+      const individualId = individualIdMap.get(localId);
+      const key = `${unionId}:${individualId}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push({ union_id: unionId, individual_id: individualId });
+    };
+    add(f.husbandLocalId);
+    add(f.wifeLocalId);
   }
   if (!rows.length) return;
   const { error } = await supabase.from('union_partners').insert(rows);
@@ -210,8 +295,8 @@ export async function commitImport(model) {
   const placeIdMap = await insertPlaces(places, treeId);
   await insertSources(sources, treeId); // (branché aux citations dans une phase ultérieure)
   const individualIdMap = await upsertIndividuals(individuals, treeId, importBatchId, placeIdMap);
-  const unionIdMap = await insertUnions(families, treeId, placeIdMap);
-  await insertUnionPartners(families, unionIdMap, individualIdMap);
+  const { map: unionIdMap, existingPairs } = await insertUnions(families, treeId, placeIdMap, individualIdMap);
+  await insertUnionPartners(families, unionIdMap, individualIdMap, existingPairs);
   await insertFiliations(filiations, treeId, unionIdMap, individualIdMap);
   await insertDerivedEvents(individuals, families, treeId, individualIdMap, unionIdMap, placeIdMap);
 
