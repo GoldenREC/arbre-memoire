@@ -1,0 +1,131 @@
+import { describe, it, expect } from 'vitest';
+import { mapCustomImportToStagingModel } from './mapper.js';
+
+describe('mapCustomImportToStagingModel', () => {
+  it('mappe un individu simple sans lieu ni preuve', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'p1', firstNames: 'Jean', lastName: 'Durand', sex: 'M' }],
+    });
+    expect(model.individuals).toEqual([
+      expect.objectContaining({
+        localId: 'p1', firstNames: 'Jean', lastName: 'Durand', sex: 'M',
+        birthDate: null, birthDatePrecision: 'unknown', birthPlaceLocalId: null,
+        isDeceased: false,
+      }),
+    ]);
+    expect(model.places).toEqual([]);
+    expect(model.proofs).toEqual([]);
+  });
+
+  it('enregistre le lieu structuré de naissance et le relie à la fiche', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{
+        localId: 'p1',
+        birth: { date: '1900-01-01', datePrecision: 'exact', place: { city: 'Grasse', country: 'France' } },
+      }],
+    });
+    expect(model.places).toHaveLength(1);
+    expect(model.places[0].structured).toEqual(expect.objectContaining({ city: 'Grasse', country: 'France' }));
+    expect(model.individuals[0].birthPlaceLocalId).toBe(model.places[0].localId);
+  });
+
+  it('déduplique un même lieu réutilisé par plusieurs personnes (fratrie)', () => {
+    const place = { city: 'Grasse', postalCode: '06130', country: 'France' };
+    const model = mapCustomImportToStagingModel({
+      individuals: [
+        { localId: 'enfant1', birth: { date: '1900-01-01', datePrecision: 'exact', place } },
+        { localId: 'enfant2', birth: { date: '1902-01-01', datePrecision: 'exact', place } },
+      ],
+    });
+    expect(model.places).toHaveLength(1);
+    expect(model.individuals[0].birthPlaceLocalId).toBe(model.individuals[1].birthPlaceLocalId);
+  });
+
+  it('extrait une preuve de naissance et compose un titre lisible', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{
+        localId: 'p1', firstNames: 'Jean', lastName: 'Durand',
+        birth: { date: '1900-01-01', datePrecision: 'exact', proof: { type: 'family' } },
+      }],
+    });
+    expect(model.proofs).toEqual([
+      expect.objectContaining({
+        subjectKind: 'individual', subjectLocalId: 'p1', eventType: 'birth',
+        title: 'Acte de naissance — Jean Durand',
+        proof: { type: 'family' },
+      }),
+    ]);
+  });
+
+  it("ignore la preuve de décès si isDeceased n'est pas vrai", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{
+        localId: 'p1',
+        death: { date: '1950-01-01', datePrecision: 'exact', proof: { type: 'family' } },
+      }],
+    });
+    expect(model.proofs).toEqual([]);
+    expect(model.individuals[0].deathDate).toBeNull();
+  });
+
+  it('extrait la preuve de décès si isDeceased est vrai', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{
+        localId: 'p1', isDeceased: true,
+        death: { date: '1950-01-01', datePrecision: 'exact', proof: { type: 'acte', url: 'https://x' } },
+      }],
+    });
+    expect(model.proofs).toHaveLength(1);
+    expect(model.proofs[0].eventType).toBe('death');
+  });
+
+  it('construit les filiations à partir de "parents"', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [
+        { localId: 'enfant', parents: ['pere', 'mere'] },
+        { localId: 'pere' },
+        { localId: 'mere' },
+      ],
+    });
+    expect(model.filiations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ childLocalId: 'enfant', parentLocalId: 'pere' }),
+        expect.objectContaining({ childLocalId: 'enfant', parentLocalId: 'mere' }),
+      ])
+    );
+  });
+
+  it("relie la filiation à l'union correspondante quand les 2 parents sont aussi des partenaires", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [
+        { localId: 'enfant', parents: ['pere', 'mere'] },
+        { localId: 'pere' },
+        { localId: 'mere' },
+      ],
+      unions: [{ localId: 'u1', partners: ['pere', 'mere'] }],
+    });
+    for (const f of model.filiations) {
+      expect(f.unionLocalId).toBe('u1');
+    }
+  });
+
+  it('mappe une union avec ses partnerLocalIds (pas husband/wife)', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], status: 'divorced', startDate: '1920-01-01', startDatePrecision: 'exact' }],
+    });
+    expect(model.families).toEqual([
+      expect.objectContaining({ localId: 'u1', partnerLocalIds: ['a', 'b'], status: 'divorced' }),
+    ]);
+  });
+
+  it("extrait la preuve de mariage avec subjectKind 'union'", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], proof: { type: 'acte', url: 'https://archives/mariage' } }],
+    });
+    expect(model.proofs).toEqual([
+      expect.objectContaining({ subjectKind: 'union', subjectLocalId: 'u1', eventType: 'marriage' }),
+    ]);
+  });
+});

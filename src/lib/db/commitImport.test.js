@@ -170,3 +170,84 @@ describe('commitImport — déduplication des unions (régression duplication ma
     expect(mock.inserted.union_partners).toBeUndefined(); // la paire existe déjà, pas réinsérée
   });
 });
+
+describe('commitImport — lieux structurés et unions génériques (import personnalisé)', () => {
+  beforeEach(() => {
+    mock = makeSupabaseMock();
+  });
+
+  it('insère un lieu structuré avec ses 9 champs et compose raw_label/normalized', async () => {
+    const { commitImport } = await import('./commitImport.js');
+    const model = {
+      treeId: 'tree-1',
+      importBatchId: 'batch-1',
+      places: [{ localId: 'place:1', structured: { city: 'Grasse', postalCode: '06130', country: 'France' } }],
+      sources: [],
+      individuals: [],
+      families: [],
+      filiations: [],
+    };
+
+    const result = await commitImport(model);
+
+    expect(mock.inserted.places).toHaveLength(1);
+    expect(mock.inserted.places[0]).toMatchObject({
+      city: 'Grasse', postal_code: '06130', country: 'France',
+      raw_label: '06130 Grasse, France',
+    });
+    expect(result.placeIdMap.get('place:1')).toBeDefined();
+  });
+
+  it('garde le comportement raw_label existant pour un lieu sans "structured" (GEDCOM)', async () => {
+    const { commitImport } = await import('./commitImport.js');
+    const model = {
+      treeId: 'tree-1', importBatchId: 'batch-1',
+      places: [{ localId: 'place:1', rawLabel: 'Grasse, Alpes-Maritimes, France' }],
+      sources: [], individuals: [], families: [], filiations: [],
+    };
+    await commitImport(model);
+    expect(mock.inserted.places[0]).toEqual({
+      tree_id: 'tree-1', raw_label: 'Grasse, Alpes-Maritimes, France', normalized: 'grasse, alpes-maritimes, france',
+    });
+    expect(mock.inserted.places[0].city).toBeUndefined();
+  });
+
+  it('crée une union à partir de partnerLocalIds (sans husbandLocalId/wifeLocalId)', async () => {
+    mock = makeSupabaseMock({ individuals: [{ id: 'real-a' }, { id: 'real-b' }] });
+    const { commitImport } = await import('./commitImport.js');
+    const model = {
+      treeId: 'tree-1', importBatchId: 'batch-1',
+      places: [], sources: [],
+      individuals: [
+        { localId: 'a', existingId: 'real-a', firstNames: 'A' },
+        { localId: 'b', existingId: 'real-b', firstNames: 'B' },
+      ],
+      families: [{ localId: 'u1', partnerLocalIds: ['a', 'b'], unionType: 'marriage', status: 'ongoing' }],
+      filiations: [],
+    };
+
+    const result = await commitImport(model);
+
+    expect(mock.inserted.unions).toHaveLength(1);
+    expect(mock.inserted.union_partners).toHaveLength(2);
+    expect(result.unionIdMap.get('u1')).toBeDefined();
+  });
+
+  it('retourne individualIdMap/unionIdMap/placeIdMap en plus des compteurs', async () => {
+    mock = makeSupabaseMock({ individuals: [{ id: 'real-a' }] });
+    const { commitImport } = await import('./commitImport.js');
+    const model = {
+      treeId: 'tree-1', importBatchId: 'batch-1',
+      places: [], sources: [],
+      individuals: [{ localId: 'a', existingId: 'real-a', firstNames: 'A' }],
+      families: [], filiations: [],
+    };
+
+    const result = await commitImport(model);
+
+    expect(result.individualIdMap).toBeInstanceOf(Map);
+    expect(result.individualIdMap.get('a')).toBe('real-a');
+    expect(result.unionIdMap).toBeInstanceOf(Map);
+    expect(result.placeIdMap).toBeInstanceOf(Map);
+  });
+});

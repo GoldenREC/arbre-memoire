@@ -3,6 +3,7 @@ import { mergeIndividuals, applyConflictResolutions } from '../../lib/dedupe/mer
 import { commitImport } from '../../lib/db/commitImport.js';
 import { clearStagingArea } from '../../lib/db/localDb.js';
 import { supabase } from '../../lib/supabaseClient.js';
+import { attachImportProofs } from './attachImportProofs.js';
 
 const FIELD_LABELS = {
   firstNames: 'Prénoms', lastName: 'Nom', birthName: 'Nom de naissance', sex: 'Sexe',
@@ -17,7 +18,7 @@ const FIELD_LABELS = {
  * deux fiches séparées. Rien n'est écrit en base avant le clic final
  * sur "Valider l'import".
  */
-export default function MergeReview({ treeId, importBatchId, stagingModel, candidates, onDone }) {
+export default function MergeReview({ treeId, importBatchId, stagingModel, candidates, imagesByPath, onDone }) {
   // Un seul meilleur candidat retenu par individu entrant (v1).
   const bestByIncoming = useMemo(() => {
     const map = new Map();
@@ -38,6 +39,7 @@ export default function MergeReview({ treeId, importBatchId, stagingModel, candi
   const [resolutions, setResolutions] = useState({}); // { [localId]: { [field]: 'existing'|'incoming' } }
   const [committing, setCommitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [proofSummary, setProofSummary] = useState(null); // { attached, failed } — import personnalisé uniquement
 
   const matchedCount = bestByIncoming.size;
   const newCount = stagingModel.individuals.length - matchedCount;
@@ -65,7 +67,7 @@ export default function MergeReview({ treeId, importBatchId, stagingModel, candi
         return { ...incoming, existingId: null };
       });
 
-      await commitImport({
+      const result = await commitImport({
         treeId,
         importBatchId,
         places: stagingModel.places,
@@ -77,13 +79,57 @@ export default function MergeReview({ treeId, importBatchId, stagingModel, candi
 
       await supabase.from('import_batches').update({ status: 'completed' }).eq('id', importBatchId);
       await clearStagingArea();
-      onDone();
+
+      // Import personnalisé (voir docs/IMPORT_FORMAT.md) : attache les
+      // preuves (actes/informations familiales) une fois les vrais UUID
+      // connus. Une fiche fusionnée (decision==='merge') garde son
+      // localId dans finalIndividuals, donc individualIdMap la résout
+      // comme n'importe quelle autre.
+      if (stagingModel.proofs?.length) {
+        const summary = await attachImportProofs(treeId, stagingModel.proofs, result, imagesByPath || new Map());
+        setProofSummary(summary);
+      } else {
+        onDone();
+      }
     } catch (err) {
       console.error(err);
       setErrorMsg(err.message || "L'import a échoué pendant l'écriture en base.");
     } finally {
       setCommitting(false);
     }
+  }
+
+  if (proofSummary) {
+    return (
+      <div className="max-w-xl">
+        <h1 className="mb-1 text-xl font-semibold">Import terminé</h1>
+        <p className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
+          {proofSummary.attached} preuve{proofSummary.attached > 1 ? 's' : ''} attachée
+          {proofSummary.attached > 1 ? 's' : ''} (acte ou information familiale).
+        </p>
+        {proofSummary.failed.length > 0 && (
+          <div className="mb-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+            <p className="mb-2 font-medium">
+              {proofSummary.failed.length} preuve{proofSummary.failed.length > 1 ? 's' : ''} n'
+              {proofSummary.failed.length > 1 ? 'ont' : 'a'} pas pu être attachée
+              {proofSummary.failed.length > 1 ? 's' : ''} — les fiches ont bien été créées, il
+              faudra rattacher ces actes à la main depuis la fiche concernée :
+            </p>
+            <ul className="list-inside list-disc space-y-1">
+              {proofSummary.failed.map((f, i) => (
+                <li key={i}>{f.title} — {f.error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <button
+          onClick={onDone}
+          className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-700"
+        >
+          Continuer
+        </button>
+      </div>
+    );
   }
 
   return (

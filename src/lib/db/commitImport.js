@@ -20,16 +20,44 @@
  * }
  */
 import { supabase } from '../supabaseClient.js';
+import { composePlaceLabel, isPlaceEmpty } from '../utils/placeLabel.js';
 
+/**
+ * Un lieu de staging est soit { localId, rawLabel } (GEDCOM — chaîne
+ * libre, comportement historique inchangé), soit { localId, structured }
+ * où `structured` est un objet aux 9 champs (voir StructuredPlaceInput) —
+ * utilisé par l'import personnalisé (docs/IMPORT_FORMAT.md). Dans ce
+ * second cas, raw_label/normalized sont composés automatiquement, comme
+ * le fait findOrCreateStructuredPlace côté saisie manuelle.
+ */
 async function insertPlaces(places, treeId) {
   const map = new Map();
   if (!places.length) return map;
 
-  const rows = places.map((p) => ({
-    tree_id: treeId,
-    raw_label: p.rawLabel,
-    normalized: p.rawLabel?.trim().toLowerCase() ?? null,
-  }));
+  const rows = places.map((p) => {
+    if (p.structured && !isPlaceEmpty(p.structured)) {
+      const rawLabel = composePlaceLabel(p.structured);
+      return {
+        tree_id: treeId,
+        raw_label: rawLabel,
+        normalized: rawLabel.toLowerCase(),
+        street_number: p.structured.streetNumber?.trim() || null,
+        street_name: p.structured.streetName?.trim() || null,
+        building_name: p.structured.buildingName?.trim() || null,
+        arrondissement: p.structured.arrondissement?.trim() || null,
+        city: p.structured.city?.trim() || null,
+        postal_code: p.structured.postalCode?.trim() || null,
+        department: p.structured.department?.trim() || null,
+        region: p.structured.region?.trim() || null,
+        country: p.structured.country?.trim() || null,
+      };
+    }
+    return {
+      tree_id: treeId,
+      raw_label: p.rawLabel,
+      normalized: p.rawLabel?.trim().toLowerCase() ?? null,
+    };
+  });
   const { data, error } = await supabase.from('places').insert(rows).select('id');
   if (error) throw error;
   data.forEach((row, i) => map.set(places[i].localId, row.id));
@@ -98,6 +126,17 @@ async function upsertIndividuals(individuals, treeId, importBatchId, placeIdMap)
 }
 
 /**
+ * Les localId des partenaires d'une union de staging : soit directement
+ * `f.partnerLocalIds` (import personnalisé — liste libre, sans notion de
+ * mari/femme), soit `[husbandLocalId, wifeLocalId]` (GEDCOM — comportement
+ * historique inchangé).
+ */
+function partnerLocalIdsOf(f) {
+  if (f.partnerLocalIds) return f.partnerLocalIds.filter(Boolean);
+  return [f.husbandLocalId, f.wifeLocalId].filter(Boolean);
+}
+
+/**
  * Clé de déduplication d'une union : la liste triée des ids réels (déjà
  * résolus via individualIdMap) de ses partenaires. Deux familles qui
  * partagent exactement les mêmes partenaires sont la même union, même si
@@ -106,13 +145,9 @@ async function upsertIndividuals(individuals, treeId, importBatchId, placeIdMap)
  * Retourne null quand aucun partenaire n'est résolu (rien à dédupliquer).
  */
 export function partnersKey(f, individualIdMap) {
-  const ids = [];
-  if (f.husbandLocalId && individualIdMap.has(f.husbandLocalId)) {
-    ids.push(individualIdMap.get(f.husbandLocalId));
-  }
-  if (f.wifeLocalId && individualIdMap.has(f.wifeLocalId)) {
-    ids.push(individualIdMap.get(f.wifeLocalId));
-  }
+  const ids = partnerLocalIdsOf(f)
+    .filter((localId) => individualIdMap.has(localId))
+    .map((localId) => individualIdMap.get(localId));
   if (!ids.length) return null;
   return ids.slice().sort().join(',');
 }
@@ -203,16 +238,14 @@ async function insertUnionPartners(families, unionIdMap, individualIdMap, existi
                                         // ou déjà ajoutés ici — jamais réinsérés (clé primaire composite).
   for (const f of families) {
     const unionId = unionIdMap.get(f.localId);
-    const add = (localId) => {
-      if (!localId || !individualIdMap.has(localId)) return;
+    for (const localId of partnerLocalIdsOf(f)) {
+      if (!individualIdMap.has(localId)) continue;
       const individualId = individualIdMap.get(localId);
       const key = `${unionId}:${individualId}`;
-      if (seen.has(key)) return;
+      if (seen.has(key)) continue;
       seen.add(key);
       rows.push({ union_id: unionId, individual_id: individualId });
-    };
-    add(f.husbandLocalId);
-    add(f.wifeLocalId);
+    }
   }
   if (!rows.length) return;
   const { error } = await supabase.from('union_partners').insert(rows);
@@ -304,5 +337,11 @@ export async function commitImport(model) {
     individualsWritten: individualIdMap.size,
     unionsWritten: unionIdMap.size,
     placesWritten: placeIdMap.size,
+    // Cartes localId -> UUID réel, exposées pour une étape ultérieure
+    // propre à l'appelant (ex. attacher des preuves/médias à des
+    // individus ou unions fraîchement créés — voir customImport/).
+    individualIdMap,
+    unionIdMap,
+    placeIdMap,
   };
 }
