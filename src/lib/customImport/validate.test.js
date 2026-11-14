@@ -55,6 +55,37 @@ describe('validateCustomImport', () => {
     expect(errors.some((e) => e.includes('.parents') && e.includes('parent inconnu'))).toBe(true);
   });
 
+  it('accepte un parent sous forme { id, filiationType } pour une filiation adoptive', () => {
+    const model = {
+      individuals: [
+        { localId: 'enfant', parents: ['mere', { id: 'beau-pere', filiationType: 'adoption_simple' }] },
+        { localId: 'mere' },
+        { localId: 'beau-pere' },
+      ],
+    };
+    const errors = validateCustomImport(model);
+    expect(errors).toEqual([]);
+  });
+
+  it('signale un filiationType invalide sur un parent objet', () => {
+    const model = {
+      individuals: [
+        { localId: 'enfant', parents: [{ id: 'pere', filiationType: 'martien' }] },
+        { localId: 'pere' },
+      ],
+    };
+    const errors = validateCustomImport(model);
+    expect(errors.some((e) => e.includes('filiationType') && e.includes('martien'))).toBe(true);
+  });
+
+  it('signale un parent objet référençant un localId introuvable', () => {
+    const model = {
+      individuals: [{ localId: 'enfant', parents: [{ id: 'inconnu', filiationType: 'foster' }] }],
+    };
+    const errors = validateCustomImport(model);
+    expect(errors.some((e) => e.includes('parents') && e.includes('inconnu'))).toBe(true);
+  });
+
   it('accepte une référence "parents" valide', () => {
     const model = {
       individuals: [

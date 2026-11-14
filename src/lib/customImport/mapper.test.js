@@ -95,6 +95,25 @@ describe('mapCustomImportToStagingModel', () => {
     );
   });
 
+  it('transmet le filiationType par défaut "biological" pour un parent texte, et celui fourni pour un parent objet', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [
+        {
+          localId: 'enfant',
+          parents: ['mere-bio', { id: 'pere-adoptif', filiationType: 'adoption_simple' }],
+        },
+        { localId: 'mere-bio' },
+        { localId: 'pere-adoptif' },
+      ],
+    });
+    expect(model.filiations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ childLocalId: 'enfant', parentLocalId: 'mere-bio', filiationType: 'biological' }),
+        expect.objectContaining({ childLocalId: 'enfant', parentLocalId: 'pere-adoptif', filiationType: 'adoption_simple' }),
+      ])
+    );
+  });
+
   it("relie la filiation à l'union correspondante quand les 2 parents sont aussi des partenaires", () => {
     const model = mapCustomImportToStagingModel({
       individuals: [

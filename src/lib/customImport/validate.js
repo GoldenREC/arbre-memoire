@@ -12,6 +12,14 @@ const SEX_VALUES = ['M', 'F', 'U'];
 const DATE_PRECISION_VALUES = ['exact', 'about', 'before', 'after', 'unknown'];
 const PROOF_TYPE_VALUES = ['acte', 'family'];
 const UNION_STATUS_VALUES = ['ongoing', 'divorced', 'widowed', 'annulled', 'unknown'];
+const FILIATION_TYPE_VALUES = [
+  'biological',
+  'adoption_plenary',
+  'adoption_simple',
+  'foster',
+  'late_recognition',
+  'unknown',
+];
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isPlainObject(v) {
@@ -93,13 +101,31 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
       if (!Array.isArray(ind.parents)) {
         errors.push(`${label}.parents : doit être une liste de localId.`);
       } else {
-        for (const parentId of ind.parents) {
-          if (parentId === null || parentId === undefined) {
+        for (const [pi, parent] of ind.parents.entries()) {
+          const parentLabel = `${label}.parents[${pi}]`;
+          if (parent === null || parent === undefined) {
             errors.push(
               `${label}.parents : contient un parent inconnu (null) — un parent non identifié ne doit pas apparaître dans la liste, retire simplement cette entrée (ex. ["mere"] au lieu de [null, "mere"]).`
             );
-          } else if (!localIds.has(parentId)) {
-            errors.push(`${label}.parents : référence "${parentId}" introuvable dans "individuals".`);
+          } else if (typeof parent === 'string') {
+            if (!localIds.has(parent)) {
+              errors.push(`${label}.parents : référence "${parent}" introuvable dans "individuals".`);
+            }
+          } else if (isPlainObject(parent)) {
+            if (typeof parent.id !== 'string') {
+              errors.push(`${parentLabel}.id : requis (localId du parent) quand "parents" contient un objet.`);
+            } else if (!localIds.has(parent.id)) {
+              errors.push(`${label}.parents : référence "${parent.id}" introuvable dans "individuals".`);
+            }
+            if (parent.filiationType !== undefined && !FILIATION_TYPE_VALUES.includes(parent.filiationType)) {
+              errors.push(
+                `${parentLabel}.filiationType : "${parent.filiationType}" invalide (attendu : ${FILIATION_TYPE_VALUES.join('|')}).`
+              );
+            }
+          } else {
+            errors.push(
+              `${parentLabel} : doit être soit un localId (texte), soit un objet { id, filiationType } — pour un parent adoptif par exemple.`
+            );
           }
         }
       }

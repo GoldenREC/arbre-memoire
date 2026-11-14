@@ -134,10 +134,16 @@ export function mapCustomImportToStagingModel(model) {
 
   const filiations = [];
   for (const ind of model.individuals) {
-    const parentIds = ind.parents || [];
+    // Chaque entrée de "parents" est soit un localId (texte, filiation biologique
+    // implicite — rétrocompatible), soit { id, filiationType } pour une filiation
+    // non biologique (adoption, famille d'accueil, reconnaissance tardive...).
+    const parentEntries = (ind.parents || []).map((p) =>
+      typeof p === 'string' ? { id: p, filiationType: 'biological' } : { id: p.id, filiationType: p.filiationType || 'biological' }
+    );
+    const parentIds = parentEntries.map((p) => p.id);
     const unionLocalId = findParentalUnion(parentIds, model.unions || []);
-    for (const parentLocalId of parentIds) {
-      filiations.push({ childLocalId: ind.localId, parentLocalId, unionLocalId, filiationType: 'biological' });
+    for (const { id: parentLocalId, filiationType } of parentEntries) {
+      filiations.push({ childLocalId: ind.localId, parentLocalId, unionLocalId, filiationType });
     }
   }
 
