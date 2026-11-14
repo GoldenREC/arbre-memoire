@@ -6,6 +6,8 @@ import { runFullAudit } from './auditEngine.js';
 import { severityStatus } from './chartColors.js';
 import Meter from './charts/Meter.jsx';
 import MergeDuplicateDialog from './MergeDuplicateDialog.jsx';
+import SuggestionsPanel from './SuggestionsPanel.jsx';
+import { cleanupTreeEventDuplicates } from './cleanupDuplicates.js';
 
 const KIND_LABELS = {
   death_before_birth: 'Décès avant naissance',
@@ -49,6 +51,7 @@ export default function AuditPage() {
   const [state, setState] = useState({ loading: true, error: null, bundle: null });
   const [severityFilter, setSeverityFilter] = useState(null);
   const [mergeCandidate, setMergeCandidate] = useState(null); // { aId, bId } | null
+  const [cleanup, setCleanup] = useState({ running: false, result: null, error: null });
 
   const reload = useCallback(() => {
     if (!currentTreeId) return;
@@ -106,6 +109,18 @@ export default function AuditPage() {
 
   const visibleFindings = severityFilter ? findings.filter((f) => f.severity === severityFilter) : findings;
 
+  async function handleCleanupDuplicates() {
+    if (!currentTreeId) return;
+    setCleanup({ running: true, result: null, error: null });
+    try {
+      const result = await cleanupTreeEventDuplicates(currentTreeId);
+      setCleanup({ running: false, result, error: null });
+      reload();
+    } catch (err) {
+      setCleanup({ running: false, result: null, error: err.message || 'Erreur lors du nettoyage.' });
+    }
+  }
+
   if (state.loading) return <p className="text-sm text-neutral-400">Chargement de l'audit…</p>;
   if (state.error) return <p className="text-sm text-red-500">{state.error}</p>;
   if (!state.bundle || state.bundle.individuals.length === 0) {
@@ -115,9 +130,25 @@ export default function AuditPage() {
   return (
     <div>
       <h1 className="mb-1 text-xl font-semibold">Audit — incohérences</h1>
-      <p className="mb-6 text-sm text-neutral-500 dark:text-neutral-400">
+      <p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
         Détection automatique d'anomalies chronologiques, de doublons potentiels et de fiches isolées. Les seuils utilisés sont des repères à vérifier, jamais des certitudes.
       </p>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <button
+          onClick={handleCleanupDuplicates}
+          disabled={cleanup.running}
+          className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-200 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-200"
+        >
+          {cleanup.running ? 'Nettoyage en cours…' : 'Nettoyer les événements en double'}
+        </button>
+        {cleanup.result && (
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+            {cleanup.result.unionsMerged} union(s) fusionnée(s), {cleanup.result.eventsRemoved} événement(s) en double supprimé(s).
+          </span>
+        )}
+        {cleanup.error && <span className="text-xs text-red-500">{cleanup.error}</span>}
+      </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Constats au total" value={findings.length} />
@@ -187,6 +218,17 @@ export default function AuditPage() {
           </ul>
         )}
       </div>
+
+      <SuggestionsPanel
+        treeId={currentTreeId}
+        individuals={state.bundle.individuals}
+        filiations={state.bundle.filiations}
+        places={state.bundle.places}
+        placeUsageCounts={state.bundle.placeUsageCounts}
+        dismissedKeys={state.bundle.dismissedSuggestionKeys}
+        individualsById={individualsById}
+        onChanged={reload}
+      />
 
       {mergeCandidate && (
         <MergeDuplicateDialog

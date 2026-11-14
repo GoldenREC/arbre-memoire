@@ -22,6 +22,7 @@ export async function loadStatsBundle(treeId) {
     { data: placeRows, error: plErr },
     { data: faceTagRows, error: tagErr },
     { data: mediaLinkRows, error: linkErr },
+    { data: dismissalRows },
   ] = await Promise.all([
     supabase.from('individuals').select('id, first_names, last_name, sex, birth_date, birth_date_precision, death_date, death_date_precision, birth_place_id, death_place_id, is_deceased'),
     supabase.from('filiations').select('id, child_id, parent_id, filiation_type'),
@@ -30,10 +31,17 @@ export async function loadStatsBundle(treeId) {
     supabase.from('events').select('id, subject_kind, subject_id, event_type, event_date, proof_level, place_id'),
     supabase.from('citations').select('id, source_id, event_id'),
     supabase.from('media').select('id, source_id, media_type'),
-    supabase.from('places').select('id, raw_label'),
+    supabase.from('places').select('id, raw_label, region, country'),
     supabase.from('media_face_tags').select('media_id, individual_id'),
     supabase.from('media_links').select('media_id, subject_kind, subject_id'),
+    supabase.from('suggestion_dismissals').select('suggestion_key'),
   ]);
+
+  // suggestion_dismissals peut ne pas exister encore (migration
+  // supabase/suggestions.sql pas encore exécutée) : on dégrade en
+  // silence plutôt que de casser tout le chargement Audit/Statistiques
+  // pour une fonctionnalité annexe.
+  const dismissedSuggestionKeys = new Set((dismissalRows || []).map((d) => d.suggestion_key));
 
   for (const [label, error] of [
     ['individuals', indErr], ['filiations', filErr], ['unions', unErr], ['union_partners', partErr],
@@ -67,6 +75,13 @@ export async function loadStatsBundle(treeId) {
 
   const placesById = new Map((placeRows || []).map((p) => [p.id, p.raw_label]));
 
+  // Détail complet des lieux (région/pays), pour le détecteur de
+  // coquilles de lieux (suggestionsEngine.js) — placesById ci-dessus
+  // reste une simple Map id → libellé, déjà consommée telle quelle par
+  // statsEngine.js et StatisticsPage.jsx : on n'y touche pas, et on
+  // ajoute cette liste à part plutôt que d'en changer la forme.
+  const places = (placeRows || []).map((p) => ({ id: p.id, rawLabel: p.raw_label, region: p.region, country: p.country }));
+
   const events = (eventRows || []).map((e) => ({
     id: e.id,
     subjectKind: e.subject_kind,
@@ -97,6 +112,22 @@ export async function loadStatsBundle(treeId) {
     ...(mediaLinkRows || []).filter((l) => l.subject_kind === 'individual').map((l) => l.subject_id),
   ]);
 
+  // Nombre de références à chaque lieu (naissance, décès, union,
+  // événement) — utilisé par detectPlaceInconsistencies pour repérer
+  // l'orthographe la plus "installée" dans l'arbre face à une variante
+  // rare.
+  const placeUsageCounts = new Map();
+  const bumpPlaceUsage = (placeId) => {
+    if (!placeId) return;
+    placeUsageCounts.set(placeId, (placeUsageCounts.get(placeId) || 0) + 1);
+  };
+  for (const ind of individuals) {
+    bumpPlaceUsage(ind.birthPlaceId);
+    bumpPlaceUsage(ind.deathPlaceId);
+  }
+  for (const u of unions) bumpPlaceUsage(u.placeId);
+  for (const e of events) bumpPlaceUsage(e.placeId);
+
   return {
     individuals,
     filiations,
@@ -107,6 +138,9 @@ export async function loadStatsBundle(treeId) {
     events,
     citations,
     placesById,
+    places,
+    placeUsageCounts,
+    dismissedSuggestionKeys,
     individualsWithPhoto,
   };
 }
