@@ -4,11 +4,8 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 import { loadStatsBundle } from './statsData.js';
 import { buildUnionReviewRows, summarizeUnionReview } from './unionReview.js';
 import UnionStatusForm from '../individual/UnionStatusForm.jsx';
-import { RELATIONSHIP_STATUS_LABELS, saveUnionMilestones } from '../individual/unionMutations.js';
-import { fetchStructuredPlace } from '../individual/individualMutations.js';
-import { EMPTY_PLACE } from '../../components/ui/StructuredPlaceInput.jsx';
+import { RELATIONSHIP_STATUS_LABELS } from '../individual/unionMutations.js';
 import { formatGenealogyDate } from '../../lib/utils/dates.js';
-import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const FILTERS = [
   { value: 'suspect', label: 'Mariages sans preuve' },
@@ -29,9 +26,8 @@ const STATUS_BADGE = {
  * pour corriger en série celles que l'ancien import avait marquées
  * "mariage" sans preuve. Rien de nouveau dans les principes : le bouton
  * "Modifier" ouvre le même formulaire de statut que la fiche individu
- * (UnionStatusForm), et "Passer en couple" applique exactement le même
- * enregistrement (saveUnionMilestones) en conservant la date et le lieu
- * comme mise en couple.
+ * (UnionStatusForm), et "Passer en couple" ouvre ce même formulaire
+ * pré-réglé sur "En couple" — il reste à choisir la preuve et enregistrer.
  */
 export default function UnionReviewPage() {
   const currentTreeId = useAuthStore((s) => s.currentTreeId);
@@ -42,7 +38,7 @@ export default function UnionReviewPage() {
   const [filter, setFilter] = useState('suspect');
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [busyId, setBusyId] = useState(null);
+  const [presetStatus, setPresetStatus] = useState(null);
 
   const reload = useCallback(() => {
     if (!currentTreeId) return;
@@ -67,23 +63,6 @@ export default function UnionReviewPage() {
       return true;
     });
   }, [rows, filter, search]);
-
-  async function handleSetCouple(row) {
-    setBusyId(row.union.id);
-    try {
-      const place = (await fetchStructuredPlace(row.union.placeId)) || EMPTY_PLACE;
-      await saveUnionMilestones(currentTreeId, row.union.id, {
-        relationshipStatus: 'couple',
-        start: { date: row.union.startDate || '', datePrecision: row.union.startDatePrecision || 'unknown', place },
-      });
-      pushToast('Union repassée « en couple ».');
-      reload();
-    } catch (err) {
-      pushErrorToast(err.message);
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (state.loading) return <p className="text-sm text-neutral-500">Chargement des unions…</p>;
   if (state.error) return <p className="text-sm text-red-600">{state.error}</p>;
@@ -154,15 +133,14 @@ export default function UnionReviewPage() {
                   <div className="flex gap-2">
                     {row.suspect && (
                       <button
-                        onClick={() => handleSetCouple(row)}
-                        disabled={busyId === row.union.id}
-                        className="rounded-lg bg-accent-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+                        onClick={() => { setPresetStatus('couple'); setEditingId(row.union.id); }}
+                        className="rounded-lg bg-accent-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-700"
                       >
-                        {busyId === row.union.id ? 'Enregistrement…' : 'Passer en couple'}
+                        Passer en couple
                       </button>
                     )}
                     <button
-                      onClick={() => setEditingId(editingId === row.union.id ? null : row.union.id)}
+                      onClick={() => { setPresetStatus(null); setEditingId(editingId === row.union.id ? null : row.union.id); }}
                       className="rounded-lg border border-neutral-300 px-2.5 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
                     >
                       {editingId === row.union.id ? 'Fermer' : 'Modifier'}
@@ -173,6 +151,8 @@ export default function UnionReviewPage() {
               {editingId === row.union.id && (
                 <div className="mt-3">
                   <UnionStatusForm
+                    key={`${row.union.id}:${presetStatus || ''}`}
+                    initialStatus={presetStatus || undefined}
                     treeId={currentTreeId}
                     union={row.union}
                     unionEvents={row.unionEvents}

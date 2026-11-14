@@ -14,6 +14,7 @@
 import { supabase } from '../../lib/supabaseClient.js';
 import { findOrCreateStructuredPlace } from './individualMutations.js';
 import { isPlaceEmpty } from '../../lib/utils/placeLabel.js';
+import { attachDateProof } from './actsMutations.js';
 
 export const RELATIONSHIP_STATUS_LABELS = {
   couple: 'En couple',
@@ -36,7 +37,7 @@ export function relationshipStatusFromUnion(union) {
 }
 
 /** Crée, met à jour, ou supprime (si date et lieu vides) l'événement d'un jalon d'union. */
-async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, datePrecision, place } = {}) {
+async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, datePrecision, place } = {}, { keepIfEmpty = false } = {}) {
   const hasContent = !!date || !isPlaceEmpty(place);
 
   const { data: existing, error: findErr } = await supabase
@@ -50,6 +51,16 @@ async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, dat
   if (findErr) throw findErr;
 
   if (!hasContent) {
+    // Jalon sans date ni lieu mais qui porte la preuve de l'union (ex. un
+    // couple dont on ne connaît pas la date) : on garde l'événement, sinon
+    // sa preuve disparaîtrait avec lui à chaque enregistrement.
+    if (keepIfEmpty) {
+      if (existing) {
+        const { error } = await supabase.from('events').update({ event_date: null, date_precision: 'unknown', place_id: null }).eq('id', existing.id);
+        if (error) throw error;
+      }
+      return;
+    }
     if (existing) {
       const { error } = await supabase.from('events').delete().eq('id', existing.id);
       if (error) throw error;
@@ -77,6 +88,52 @@ async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, dat
   }
 }
 
+export const MILESTONE_LABELS = { union_start: 'Mise en couple', marriage: 'Mariage', divorce: 'Divorce' };
+
+const DEFINING_MILESTONES = {
+  couple: ['union_start'],
+  married: ['marriage'],
+  divorced: ['marriage', 'divorce'],
+};
+
+function milestoneHasContent(m) {
+  return !!m?.date || !isPlaceEmpty(m?.place);
+}
+
+/**
+ * Jalons qui doivent porter une preuve pour le statut choisi : celui (ou
+ * ceux) qui définit le statut — la mise en couple pour "en couple", le
+ * mariage pour "mariée", mariage + divorce pour "divorcée" — même sans
+ * date connue, plus tout autre jalon affiché pour lequel une date ou un
+ * lieu est renseigné. Une union ne s'enregistre donc jamais sans preuve.
+ */
+export function milestonesRequiringProof(relationshipStatus, { start, marriage, divorce } = {}) {
+  const defining = DEFINING_MILESTONES[relationshipStatus] || DEFINING_MILESTONES.couple;
+  const visible = { union_start: start, ...(relationshipStatus !== 'couple' ? { marriage } : {}), ...(relationshipStatus === 'divorced' ? { divorce } : {}) };
+  return Object.keys(visible).filter((key) => defining.includes(key) || milestoneHasContent(visible[key]));
+}
+
+/** Quels jalons de cette union ont déjà au moins une preuve rattachée : { union_start, marriage, divorce } (booléens). */
+export async function fetchUnionMilestoneProofs(unionId) {
+  const result = { union_start: false, marriage: false, divorce: false };
+  if (!unionId) return result;
+  const { data: events, error } = await supabase
+    .from('events')
+    .select('id, event_type')
+    .eq('subject_kind', 'union')
+    .eq('subject_id', unionId);
+  if (error) throw error;
+  const ids = (events || []).map((e) => e.id);
+  if (!ids.length) return result;
+  const { data: citations, error: citErr } = await supabase.from('citations').select('event_id').in('event_id', ids);
+  if (citErr) throw citErr;
+  const cited = new Set((citations || []).map((c) => c.event_id));
+  for (const e of events) {
+    if (e.event_type in result && cited.has(e.id)) result[e.event_type] = true;
+  }
+  return result;
+}
+
 /**
  * Enregistre le statut d'une union et ses jalons. `start`/`marriage`/
  * `divorce` : { date, datePrecision, place } (place = objet structuré,
@@ -84,10 +141,14 @@ async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, dat
  * choisi (ex: "divorce" pour une union "en couple") sont nettoyés s'ils
  * existaient déjà (cas d'une correction : une union importée à tort
  * comme "mariage" perd son événement de mariage en repassant "en couple").
+ * `proofs` (optionnel) : { union_start?, marriage?, divorce? }, chacun au
+ * format DateProofInput — rattaché à l'événement du jalon par le même
+ * chemin que les preuves de naissance/décès (attachDateProof).
  */
-export async function saveUnionMilestones(treeId, unionId, { relationshipStatus, start, marriage, divorce }) {
+export async function saveUnionMilestones(treeId, unionId, { relationshipStatus, start, marriage, divorce, proofs = {} }) {
   const mapping = STATUS_TO_UNION_COLUMNS[relationshipStatus] || STATUS_TO_UNION_COLUMNS.couple;
   const startPlaceId = isPlaceEmpty(start?.place) ? null : await findOrCreateStructuredPlace(treeId, start.place);
+  const defining = DEFINING_MILESTONES[relationshipStatus] || DEFINING_MILESTONES.couple;
 
   const { error } = await supabase
     .from('unions')
@@ -103,7 +164,26 @@ export async function saveUnionMilestones(treeId, unionId, { relationshipStatus,
     .eq('id', unionId);
   if (error) throw error;
 
-  await ensureUnionMilestoneEvent(treeId, unionId, 'union_start', start);
-  await ensureUnionMilestoneEvent(treeId, unionId, 'marriage', relationshipStatus === 'couple' ? {} : marriage);
-  await ensureUnionMilestoneEvent(treeId, unionId, 'divorce', relationshipStatus === 'divorced' ? divorce : {});
+  const milestones = {
+    union_start: start,
+    marriage: relationshipStatus === 'couple' ? null : marriage,
+    divorce: relationshipStatus === 'divorced' ? divorce : null,
+  };
+  for (const [eventType, milestone] of Object.entries(milestones)) {
+    await ensureUnionMilestoneEvent(treeId, unionId, eventType, milestone || {}, { keepIfEmpty: !!milestone && defining.includes(eventType) });
+  }
+
+  for (const [eventType, proof] of Object.entries(proofs)) {
+    const milestone = milestones[eventType];
+    if (!proof || !milestone) continue;
+    const kind = proof.type === 'marginal' ? 'Mention marginale' : proof.type === 'family' ? 'Information familiale' : 'Acte';
+    await attachDateProof(treeId, {
+      subjectKind: 'union',
+      subjectId: unionId,
+      eventType,
+      snapshot: { date: milestone.date || null, datePrecision: milestone.datePrecision || 'unknown', placeId: eventType === 'union_start' ? startPlaceId : null },
+      title: `${kind} — ${MILESTONE_LABELS[eventType].toLowerCase()}`,
+      proof,
+    });
+  }
 }

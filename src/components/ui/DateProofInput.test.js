@@ -25,3 +25,10 @@ describe('isDateProofValid', () => {
     expect(isDateProofValid({ type: 'acte', url: '', file: new File(['x'], 'acte.pdf') })).toBe(true);
   });
 });
+
+describe('isDateProofValid — mention marginale', () => {
+  it("exige l'acte qui porte la mention (fichier ou permalien)", () => {
+    expect(isDateProofValid({ type: 'marginal', url: '', file: null })).toBe(false);
+    expect(isDateProofValid({ type: 'marginal', url: 'https://archives.example.org/naissance', file: null })).toBe(true);
+  });
+});

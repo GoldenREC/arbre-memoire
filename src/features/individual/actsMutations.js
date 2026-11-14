@@ -102,7 +102,9 @@ export async function attachDateProof(treeId, { subjectKind = 'individual', subj
     await uploadMediaFile(treeId, proof.file, { mediaType: 'document', sourceId, title: proof.file.name, folder: 'actes' });
   }
   await addCitation(treeId, { eventId, individualId, sourceId, transcription: proof.transcription?.trim() || null });
-  const proofLevel = proof.type === 'family' ? 'probable' : proof.file ? 'proven_original' : 'proven_secondary';
+  // Une mention marginale prouve l'événement indirectement (c'est un autre
+  // acte qui le rapporte) : source secondaire, même avec le scan joint.
+  const proofLevel = proof.type === 'family' ? 'probable' : proof.type === 'marginal' ? 'proven_secondary' : proof.file ? 'proven_original' : 'proven_secondary';
   await updateEventProofLevel(eventId, proofLevel);
   return { eventId, sourceId };
 }

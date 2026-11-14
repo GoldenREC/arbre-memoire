@@ -3,7 +3,11 @@ import DatePartsInput from '../../components/ui/DatePartsInput.jsx';
 import StructuredPlaceInput, { EMPTY_PLACE } from '../../components/ui/StructuredPlaceInput.jsx';
 import { PRECISION_OPTIONS } from '../../lib/utils/datePrecision.js';
 import { fetchStructuredPlace } from './individualMutations.js';
-import { saveUnionMilestones, relationshipStatusFromUnion, RELATIONSHIP_STATUS_LABELS } from './unionMutations.js';
+import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
+import {
+  saveUnionMilestones, relationshipStatusFromUnion, RELATIONSHIP_STATUS_LABELS,
+  milestonesRequiringProof, fetchUnionMilestoneProofs, MILESTONE_LABELS,
+} from './unionMutations.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const EMPTY_MILESTONE = { date: '', datePrecision: 'unknown', place: EMPTY_PLACE };
@@ -24,11 +28,15 @@ function milestoneFromEvent(e) {
  * mise en couple se pré-remplit depuis `union` (start_date/placeId)
  * directement, seule source de vérité pour ce jalon-là.
  */
-export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, onCancel }) {
+export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, onCancel, initialStatus }) {
   const marriageEvent = (unionEvents || []).find((e) => e.eventType === 'marriage') || null;
   const divorceEvent = (unionEvents || []).find((e) => e.eventType === 'divorce') || null;
 
-  const [relationshipStatus, setRelationshipStatus] = useState(() => relationshipStatusFromUnion(union));
+  const [relationshipStatus, setRelationshipStatus] = useState(() => initialStatus || relationshipStatusFromUnion(union));
+  // Preuves : `existingProofs` = jalons qui en ont déjà une en base ;
+  // `proofs` = celles saisies ici pour les jalons qui n'en ont pas encore.
+  const [existingProofs, setExistingProofs] = useState({ union_start: false, marriage: false, divorce: false });
+  const [proofs, setProofs] = useState({ union_start: EMPTY_DATE_PROOF, marriage: EMPTY_DATE_PROOF, divorce: EMPTY_DATE_PROOF });
   const [start, setStart] = useState({
     date: union?.startDate || '',
     datePrecision: union?.startDatePrecision || 'unknown',
@@ -44,12 +52,14 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
     async function loadPlaces() {
       setLoadingPlaces(true);
       try {
-        const [startPlace, marriagePlace, divorcePlace] = await Promise.all([
+        const [startPlace, marriagePlace, divorcePlace, proofState] = await Promise.all([
           fetchStructuredPlace(union?.placeId),
           fetchStructuredPlace(marriageEvent?.placeId),
           fetchStructuredPlace(divorceEvent?.placeId),
+          fetchUnionMilestoneProofs(union?.id),
         ]);
         if (cancelled) return;
+        setExistingProofs(proofState);
         setStart((s) => ({ ...s, place: startPlace || EMPTY_PLACE }));
         setMarriage((m) => ({ ...m, place: marriagePlace || EMPTY_PLACE }));
         setDivorce((d) => ({ ...d, place: divorcePlace || EMPTY_PLACE }));
@@ -64,10 +74,21 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [union?.id]);
 
+  // Jalons pour lesquels une preuve reste à fournir avant d'enregistrer.
+  const missingProofs = milestonesRequiringProof(relationshipStatus, { start, marriage, divorce }).filter((key) => !existingProofs[key]);
+  const proofsValid = missingProofs.every((key) => isDateProofValid(proofs[key]));
+
   async function handleSave() {
+    if (!proofsValid) {
+      pushErrorToast('Choisis une preuve pour chaque jalon signalé avant d\'enregistrer.');
+      return;
+    }
     setSaving(true);
     try {
-      await saveUnionMilestones(treeId, union.id, { relationshipStatus, start, marriage, divorce });
+      await saveUnionMilestones(treeId, union.id, {
+        relationshipStatus, start, marriage, divorce,
+        proofs: Object.fromEntries(missingProofs.map((key) => [key, proofs[key]])),
+      });
       pushToast('Union enregistrée.');
       onSaved?.();
     } catch (err) {
@@ -75,6 +96,16 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
     } finally {
       setSaving(false);
     }
+  }
+
+  function proofProps(key) {
+    return {
+      hasProof: existingProofs[key],
+      proofRequired: missingProofs.includes(key),
+      proof: proofs[key],
+      onProofChange: (v) => setProofs((p) => ({ ...p, [key]: v })),
+      proofMessage: `${MILESTONE_LABELS[key]} : une preuve est requise.`,
+    };
   }
 
   return (
@@ -86,25 +117,20 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
         </select>
       </div>
 
-      <Milestone
-        label="Mise en couple"
-        value={start}
-        onChange={setStart}
-        loadingPlaces={loadingPlaces}
-      />
+      <Milestone label="Mise en couple" value={start} onChange={setStart} loadingPlaces={loadingPlaces} {...proofProps('union_start')} />
 
       {(relationshipStatus === 'married' || relationshipStatus === 'divorced') && (
-        <Milestone label="Mariage" value={marriage} onChange={setMarriage} loadingPlaces={loadingPlaces} />
+        <Milestone label="Mariage" value={marriage} onChange={setMarriage} loadingPlaces={loadingPlaces} {...proofProps('marriage')} />
       )}
 
       {relationshipStatus === 'divorced' && (
-        <Milestone label="Divorce" value={divorce} onChange={setDivorce} loadingPlaces={loadingPlaces} />
+        <Milestone label="Divorce" value={divorce} onChange={setDivorce} loadingPlaces={loadingPlaces} {...proofProps('divorce')} />
       )}
 
       <div className="flex gap-2 pt-1">
         <button
           onClick={handleSave}
-          disabled={saving || loadingPlaces}
+          disabled={saving || loadingPlaces || !proofsValid}
           className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
         >
           {saving ? 'Enregistrement…' : 'Enregistrer'}
@@ -117,7 +143,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
   );
 }
 
-function Milestone({ label, value, onChange, loadingPlaces }) {
+function Milestone({ label, value, onChange, loadingPlaces, hasProof, proofRequired, proof, onProofChange, proofMessage }) {
   return (
     <div className="space-y-1.5 border-t border-neutral-100 pt-2 dark:border-neutral-800">
       <span className="block text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>
@@ -131,6 +157,10 @@ function Milestone({ label, value, onChange, loadingPlaces }) {
         <p className="text-xs text-neutral-400">Chargement du lieu…</p>
       ) : (
         <StructuredPlaceInput value={value.place} onChange={(v) => onChange((s) => ({ ...s, place: v }))} />
+      )}
+      {hasProof && <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Preuve déjà rattachée</p>}
+      {!loadingPlaces && proofRequired && (
+        <DateProofInput value={proof} onChange={onProofChange} allowMarginal message={proofMessage} />
       )}
     </div>
   );

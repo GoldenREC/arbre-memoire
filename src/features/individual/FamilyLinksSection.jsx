@@ -127,13 +127,30 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
 function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
   const [editingUnionId, setEditingUnionId] = useState(null);
+  // Union tout juste créée, pas encore enregistrée avec sa preuve : si on
+  // annule ou ferme son formulaire, elle est retirée (pas d'union sans preuve).
+  const [pendingUnionId, setPendingUnionId] = useState(null);
+
+  async function discardPendingUnion(unionId) {
+    setEditingUnionId(null);
+    if (unionId !== pendingUnionId) return;
+    setPendingUnionId(null);
+    try {
+      await removeUnion(unionId);
+      onChanged?.();
+      pushToast('Union non ajoutée : une preuve est requise.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
+  }
 
   async function handleSelect(person) {
     try {
       const unionId = await createUnion(treeId, individualId, person.id, {});
       setAdding(false);
       onChanged?.();
-      pushToast('Union ajoutée — précise son statut ci-dessous.');
+      pushToast('Précise le statut et la preuve de l\'union ci-dessous.');
+      setPendingUnionId(unionId);
       setEditingUnionId(unionId);
     } catch (err) {
       pushErrorToast(err.message);
@@ -161,7 +178,7 @@ function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged 
             </div>
             {canEdit && (
               <div className="flex items-center gap-2">
-                <button onClick={() => setEditingUnionId((id) => (id === u.id ? null : u.id))} className="text-xs text-neutral-400 hover:text-accent-600">
+                <button onClick={() => (editingUnionId === u.id ? discardPendingUnion(u.id) : setEditingUnionId(u.id))} className="text-xs text-neutral-400 hover:text-accent-600">
                   {editingUnionId === u.id ? 'fermer' : 'modifier'}
                 </button>
                 <button onClick={() => handleRemove(u.id)} className="text-xs text-neutral-400 hover:text-red-500">
@@ -176,8 +193,8 @@ function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged 
                 treeId={treeId}
                 union={u}
                 unionEvents={(events || []).filter((e) => e.origin === 'union' && e.unionId === u.id)}
-                onSaved={() => { setEditingUnionId(null); onChanged?.(); }}
-                onCancel={() => setEditingUnionId(null)}
+                onSaved={() => { setPendingUnionId(null); setEditingUnionId(null); onChanged?.(); }}
+                onCancel={() => discardPendingUnion(u.id)}
               />
             </div>
           )}
