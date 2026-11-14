@@ -19,7 +19,7 @@ export const ROLE_OPTIONS = [
 export async function listTreeMembers(treeId) {
   const { data: memberRows, error: memberErr } = await supabase
     .from('tree_members')
-    .select('user_id, role, created_at')
+    .select('user_id, role, invited_at')
     .eq('tree_id', treeId);
   if (memberErr) throw memberErr;
 
@@ -32,7 +32,7 @@ export async function listTreeMembers(treeId) {
   }
 
   return (memberRows || [])
-    .map((m) => ({ userId: m.user_id, role: m.role, email: emailById.get(m.user_id) || null, joinedAt: m.created_at }))
+    .map((m) => ({ userId: m.user_id, role: m.role, email: emailById.get(m.user_id) || null, joinedAt: m.invited_at }))
     .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 }
 
