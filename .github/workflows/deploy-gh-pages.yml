@@ -1,0 +1,68 @@
+name: Déployer sur GitHub Pages
+
+# Déploiement indépendant de Cloudflare Pages : les deux restent synchronisés
+# automatiquement à chaque push sur main, mais avec deux bases d'URL
+# différentes (voir vite.config.js / VITE_BASE_PATH).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Annule un déploiement en cours si un nouveau push arrive pendant qu'il tourne.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lancer les tests
+        run: npm test
+
+      - name: Construire le site (base GitHub Pages)
+        env:
+          VITE_BASE_PATH: /arbre-memoire/
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Copier index.html en 404.html
+        # GitHub Pages n'a pas de "fallback SPA" natif : pour une URL comme
+        # /arbre-memoire/individus/123, il renvoie 404.html, qui doit donc être
+        # la même coquille d'application (React Router prend ensuite le relais
+        # côté client, grâce au "basename" déjà configuré dans router.jsx).
+        run: cp dist/index.html dist/404.html
+
+      - name: Préparer l'artefact Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Déployer sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -48,4 +48,10 @@ export const router = createBrowserRouter([
   },
 
   { path: '*', element: <Navigate to="/" replace /> },
-]);
+], {
+  // BASE_URL vaut "/" (Cloudflare Pages) ou "/arbre-memoire/" (GitHub Pages)
+  // selon la configuration Vite (voir vite.config.js) : toutes les routes
+  // ci-dessus restent écrites sans ce préfixe, React Router l'ajoute/l'enlève
+  // lui-même partout (liens, redirections, lecture de l'URL).
+  basename: import.meta.env.BASE_URL,
+});
