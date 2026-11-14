@@ -70,7 +70,7 @@ export default function SourcesManager() {
       </p>
 
       <input
-        placeholder="Rechercher par titre, dépôt, cote…"
+        placeholder="Rechercher par titre, personne, dépôt, cote…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="mb-3 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-500 dark:border-neutral-700 dark:bg-neutral-900"
@@ -114,6 +114,9 @@ export default function SourcesManager() {
                     </span>
                   )}
                 </span>
+                {(s.subjects || []).some((name) => !s.title.includes(name)) && (
+                  <span className="text-xs text-neutral-600 dark:text-neutral-300">{s.subjects.join(' · ')}</span>
+                )}
                 <span className="text-xs text-neutral-400">
                   {[s.repository, s.call_number].filter(Boolean).join(' — ') || 'Aucune localisation renseignée'}
                 </span>

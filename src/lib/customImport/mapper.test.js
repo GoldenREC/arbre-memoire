@@ -278,3 +278,13 @@ describe('mapCustomImportToStagingModel', () => {
     ]);
   });
 });
+
+describe('mapCustomImportToStagingModel — titres des sources d\'union', () => {
+  it('ajoute le nom des deux conjoints au titre de la preuve', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a', firstNames: 'Charles', lastName: 'Ternay' }, { localId: 'b', firstNames: 'Marguerite', lastName: 'Couteau' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], status: 'divorced', endDate: '1948-06-07', divorceProof: { type: 'family' } }],
+    });
+    expect(model.proofs[0].title).toBe('Jugement de divorce — Charles Ternay & Marguerite Couteau');
+  });
+});

@@ -113,6 +113,19 @@ export function milestonesRequiringProof(relationshipStatus, { start, marriage, 
   return Object.keys(visible).filter((key) => defining.includes(key) || milestoneHasContent(visible[key]));
 }
 
+/** "Prénom Nom & Prénom Nom" des conjoints d'une union, pour nommer ses sources ('' si introuvables). */
+async function fetchUnionPartnerNames(unionId) {
+  const { data: partners, error } = await supabase.from('union_partners').select('individual_id').eq('union_id', unionId);
+  if (error || !partners?.length) return '';
+  const names = [];
+  for (const p of partners) {
+    const { data: ind } = await supabase.from('individuals').select('first_names, last_name').eq('id', p.individual_id).maybeSingle();
+    const name = `${ind?.first_names || ''} ${ind?.last_name || ''}`.trim();
+    if (name) names.push(name);
+  }
+  return names.join(' & ');
+}
+
 /** Quels jalons de cette union ont déjà au moins une preuve rattachée : { union_start, marriage, divorce } (booléens). */
 export async function fetchUnionMilestoneProofs(unionId) {
   const result = { union_start: false, marriage: false, divorce: false };
@@ -173,6 +186,7 @@ export async function saveUnionMilestones(treeId, unionId, { relationshipStatus,
     await ensureUnionMilestoneEvent(treeId, unionId, eventType, milestone || {}, { keepIfEmpty: !!milestone && defining.includes(eventType) });
   }
 
+  const couple = Object.values(proofs).some(Boolean) ? await fetchUnionPartnerNames(unionId) : '';
   for (const [eventType, proof] of Object.entries(proofs)) {
     const milestone = milestones[eventType];
     if (!proof || !milestone) continue;
@@ -182,7 +196,7 @@ export async function saveUnionMilestones(treeId, unionId, { relationshipStatus,
       subjectId: unionId,
       eventType,
       snapshot: { date: milestone.date || null, datePrecision: milestone.datePrecision || 'unknown', placeId: eventType === 'union_start' ? startPlaceId : null },
-      title: `${kind} — ${MILESTONE_LABELS[eventType].toLowerCase()}`,
+      title: `${kind} — ${MILESTONE_LABELS[eventType].toLowerCase()}${couple ? ` — ${couple}` : ''}`,
       proof,
     });
   }

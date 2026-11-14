@@ -23,6 +23,7 @@ export async function loadStatsBundle(treeId) {
     { data: faceTagRows, error: tagErr },
     { data: mediaLinkRows, error: linkErr },
     { data: dismissalRows },
+    { data: sourceRows },
   ] = await Promise.all([
     supabase.from('individuals').select('id, first_names, last_name, sex, birth_date, birth_date_precision, death_date, death_date_precision, birth_place_id, death_place_id, is_deceased'),
     supabase.from('filiations').select('id, child_id, parent_id, filiation_type'),
@@ -35,6 +36,7 @@ export async function loadStatsBundle(treeId) {
     supabase.from('media_face_tags').select('media_id, individual_id'),
     supabase.from('media_links').select('media_id, subject_kind, subject_id'),
     supabase.from('suggestion_dismissals').select('suggestion_key'),
+    supabase.from('sources').select('id, title, repository, call_number, source_type'),
   ]);
 
   // suggestion_dismissals peut ne pas exister encore (migration
@@ -129,7 +131,11 @@ export async function loadStatsBundle(treeId) {
   for (const u of unions) bumpPlaceUsage(u.placeId);
   for (const e of events) bumpPlaceUsage(e.placeId);
 
+  // Sources (titre, dépôt, cote) : pour repérer les preuves contradictoires (auditEngine.js).
+  const sources = (sourceRows || []).map((s) => ({ id: s.id, title: s.title, repository: s.repository, callNumber: s.call_number, sourceType: s.source_type }));
+
   return {
+    sources,
     individuals,
     filiations,
     unions,

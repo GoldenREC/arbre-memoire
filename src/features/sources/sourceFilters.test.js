@@ -46,3 +46,25 @@ describe('countSourcesByFilter', () => {
     });
   });
 });
+
+describe('attachSourceUsage', () => {
+  it("nomme les deux conjoints pour une source d'union et la personne pour une source individuelle", async () => {
+    const { attachSourceUsage } = await import('./sourcesMutations.js');
+    const out = attachSourceUsage(
+      [{ id: 's1', title: 'Jugement de divorce' }, { id: 's2', title: 'Acte de naissance' }, { id: 's3', title: 'Sans citation' }],
+      {
+        citations: [{ source_id: 's1', event_id: 'e1' }, { source_id: 's2', event_id: 'e2' }],
+        events: [
+          { id: 'e1', event_type: 'divorce', subject_kind: 'union', subject_id: 'u1' },
+          { id: 'e2', event_type: 'birth', subject_kind: 'individual', subject_id: 'a' },
+        ],
+        individuals: [{ id: 'a', first_names: 'Charles', last_name: 'Ternay' }, { id: 'b', first_names: 'Marguerite', last_name: 'Couteau' }],
+        partners: [{ union_id: 'u1', individual_id: 'a' }, { union_id: 'u1', individual_id: 'b' }],
+      }
+    );
+    expect(out[0].subjects).toEqual(['Charles Ternay & Marguerite Couteau']);
+    expect(out[0].eventTypes).toEqual(['divorce']);
+    expect(out[1].subjects).toEqual(['Charles Ternay']);
+    expect(out[2].subjects).toEqual([]);
+  });
+});

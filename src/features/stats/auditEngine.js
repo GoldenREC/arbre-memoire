@@ -261,13 +261,102 @@ export function detectOrphans(individuals, filiations, unionPartners) {
 
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
 
+const UNIQUE_EVENT_LABELS = {
+  birth: 'naissance', death: 'décès', marriage: 'mariage', divorce: 'divorce', union_start: 'mise en couple',
+};
+
+/**
+ * Événement unique enregistré plusieurs fois : une personne ne naît et ne
+ * meurt qu'une fois, une union n'a qu'une mise en couple, un mariage, un
+ * divorce. Plusieurs événements de ce type pour le même sujet sont soit
+ * des doublons que le nettoyage n'a pas reconnus (dates ou lieux saisis
+ * différemment), soit des informations contradictoires — dans les deux
+ * cas la carte et les statistiques les comptent en double.
+ */
+export function detectRepeatedUniqueEvents(events, { individualsById, partnersByUnion, placesById = new Map() }) {
+  const groups = new Map();
+  for (const e of events) {
+    if (!(e.eventType in UNIQUE_EVENT_LABELS)) continue;
+    const individualOnly = e.eventType === 'birth' || e.eventType === 'death';
+    if (individualOnly !== (e.subjectKind === 'individual')) continue;
+    const key = `${e.subjectKind}:${e.subjectId}:${e.eventType}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const findings = [];
+  for (const [key, group] of groups) {
+    if (group.length < 2) continue;
+    const first = group[0];
+    const individualIds = first.subjectKind === 'individual' ? [first.subjectId] : partnersByUnion.get(first.subjectId) || [];
+    if (!individualIds.some((id) => individualsById.has(id))) continue;
+    const who = individualIds.map((id) => fullName(individualsById.get(id) || {})).join(' et ');
+    const versions = [...new Set(group.map((e) => [e.date || 'date inconnue', placesById.get(e.placeId)].filter(Boolean).join(' à ')))];
+    const conflicting = versions.length > 1;
+    findings.push({
+      id: `repeated-event:${key}`,
+      kind: 'repeated_unique_event',
+      severity: conflicting ? 'high' : 'medium',
+      message: conflicting
+        ? `${who} : ${group.length} événements « ${UNIQUE_EVENT_LABELS[first.eventType]} » qui se contredisent (${versions.join(' ; ')}). Un seul peut être juste.`
+        : `${who} : l'événement « ${UNIQUE_EVENT_LABELS[first.eventType]} » est enregistré ${group.length} fois à l'identique (${versions[0]}).`,
+      individualIds,
+    });
+  }
+  return findings;
+}
+
+/**
+ * Preuves qui se contredisent : deux actes rattachés au même événement
+ * avec le même titre et la même cote mais deux dépôts d'archives
+ * différents — l'un des deux dépôts est forcément faux (souvent une
+ * erreur de saisie ou d'import).
+ */
+export function detectConflictingSources(sources, citations, events, { individualsById, partnersByUnion }) {
+  const sourceById = new Map(sources.map((s) => [s.id, s]));
+  const eventById = new Map(events.map((e) => [e.id, e]));
+  const sourcesByEvent = new Map();
+  for (const c of citations) {
+    const source = sourceById.get(c.sourceId);
+    if (!c.eventId || !source) continue;
+    if (!sourcesByEvent.has(c.eventId)) sourcesByEvent.set(c.eventId, new Map());
+    sourcesByEvent.get(c.eventId).set(source.id, source);
+  }
+
+  const norm = (v) => (v || '').trim().toLowerCase();
+  const findings = [];
+  for (const [eventId, map] of sourcesByEvent) {
+    const list = [...map.values()].filter((s) => norm(s.repository));
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        if (norm(a.title) !== norm(b.title) || norm(a.callNumber) !== norm(b.callNumber)) continue;
+        if (norm(a.repository) === norm(b.repository)) continue;
+        const event = eventById.get(eventId);
+        const individualIds = !event ? [] : event.subjectKind === 'individual' ? [event.subjectId] : partnersByUnion.get(event.subjectId) || [];
+        findings.push({
+          id: `conflicting-sources:${[a.id, b.id].sort().join(':')}`,
+          kind: 'conflicting_sources',
+          severity: 'medium',
+          message: `« ${a.title} » existe en deux exemplaires pour le même événement, avec deux dépôts différents : ${a.repository} et ${b.repository}. Supprime celui qui est faux dans Sources & preuves.`,
+          individualIds: individualIds.filter((id) => individualsById.has(id)),
+        });
+      }
+    }
+  }
+  return findings;
+}
+
 /** Regroupe et trie l'ensemble des constats, du plus sévère au moins sévère. */
-export function runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners }) {
+export function runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners, events = [], citations = [], sources = [], placesById }) {
   const individualsById = new Map(individuals.map((i) => [i.id, i]));
   const findings = [
     ...detectDateAnomalies(individuals, filiations, unions, partnersByUnion),
     ...detectPotentialDuplicates(individuals),
     ...detectDuplicateUnions(unions, partnersByUnion, individualsById),
+    ...detectRepeatedUniqueEvents(events, { individualsById, partnersByUnion, placesById }),
+    ...detectConflictingSources(sources, citations, events, { individualsById, partnersByUnion }),
     ...detectOrphans(individuals, filiations, unionPartners),
   ];
   return findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);

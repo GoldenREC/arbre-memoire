@@ -18,6 +18,8 @@ const KIND_LABELS = {
   potential_duplicate: 'Doublon potentiel',
   duplicate_union_exact: 'Unions en double (mêmes partenaires)',
   duplicate_union_likely: 'Unions probablement en double',
+  repeated_unique_event: 'Événement en double ou contradictoire',
+  conflicting_sources: 'Preuves contradictoires',
   orphan: 'Fiche isolée',
 };
 
@@ -71,8 +73,8 @@ export default function AuditPage() {
 
   const findings = useMemo(() => {
     if (!state.bundle) return [];
-    const { individuals, filiations, unions, partnersByUnion, unionPartners } = state.bundle;
-    return runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners });
+    const { individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById } = state.bundle;
+    return runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById });
   }, [state.bundle]);
 
   const nmdByIndividual = useMemo(() => (state.bundle ? bulkNmdStatus(state.bundle) : null), [state.bundle]);

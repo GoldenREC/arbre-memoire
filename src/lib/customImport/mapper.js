@@ -82,7 +82,10 @@ function resolveUnionType(u) {
   return 'unknown';
 }
 
-function mapUnion(u, placesMap, proofs) {
+function mapUnion(u, placesMap, proofs, namesByLocalId = new Map()) {
+  // Les sources d'une union portent le nom des conjoints, comme celles d'une personne.
+  const couple = (u.partners || []).map((id) => namesByLocalId.get(id)).filter(Boolean).join(' & ');
+  const named = (title) => (couple ? `${title} — ${couple}` : title);
   const placeLocalId = registerPlace(placesMap, u.place);
   const unionType = resolveUnionType(u);
   const isMarriage = unionType === 'marriage';
@@ -103,7 +106,7 @@ function mapUnion(u, placesMap, proofs) {
       eventType: hasOwnMarriageMilestone ? 'union_start' : isMarriage ? 'marriage' : 'union_start',
       snapshot: { date: u.startDate || null, datePrecision: u.startDatePrecision || 'unknown', placeLocalId },
       proof: u.proof,
-      title: hasOwnMarriageMilestone || !isMarriage ? 'Mise en couple' : 'Acte de mariage',
+      title: named(hasOwnMarriageMilestone || !isMarriage ? 'Mise en couple' : 'Acte de mariage'),
     });
   }
   if (hasOwnMarriageMilestone && u.marriage.proof) {
@@ -113,7 +116,7 @@ function mapUnion(u, placesMap, proofs) {
       eventType: 'marriage',
       snapshot: { date: u.marriage.date || null, datePrecision: u.marriage.datePrecision || 'unknown', placeLocalId: marriagePlaceLocalId },
       proof: u.marriage.proof,
-      title: 'Acte de mariage',
+      title: named('Acte de mariage'),
     });
   }
   // Preuve distincte pour le divorce (jugement) — rattachée à l'événement
@@ -126,7 +129,7 @@ function mapUnion(u, placesMap, proofs) {
       eventType: 'divorce',
       snapshot: { date: u.endDate, datePrecision: u.endDatePrecision || 'unknown', placeLocalId: divorcePlaceLocalId },
       proof: u.divorceProof,
-      title: 'Jugement de divorce',
+      title: named('Jugement de divorce'),
     });
   }
 
@@ -164,7 +167,12 @@ export function mapCustomImportToStagingModel(model) {
   const proofs = [];
 
   const individuals = model.individuals.map((ind) => mapIndividual(ind, placesMap, proofs));
-  const families = (model.unions || []).map((u) => mapUnion(u, placesMap, proofs));
+  const namesByLocalId = new Map(
+    model.individuals
+      .map((ind) => [ind.localId, [ind.firstNames, ind.lastName].filter(Boolean).join(' ')])
+      .filter(([, name]) => name)
+  );
+  const families = (model.unions || []).map((u) => mapUnion(u, placesMap, proofs, namesByLocalId));
 
   const filiations = [];
   for (const ind of model.individuals) {

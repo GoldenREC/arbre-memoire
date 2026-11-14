@@ -7,6 +7,7 @@ import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
 import { SOURCE_TYPES, isUnreliableSourceUrl } from '../../lib/utils/sourceReliability.js';
 import ActViewer from './ActViewer.jsx';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 /**
  * Modale de détail d'une source : champs (titre, dépôt, cote, URL,
@@ -56,9 +57,25 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
     }
   }
 
+  // Suppression en deux clics (pas de fenêtre du navigateur) : le premier
+  // arme le bouton et annonce ce qui partira, le second supprime.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   async function handleDelete() {
-    await deleteSource(sourceId);
-    onDeleted?.();
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteSource(sourceId);
+      pushToast('Source supprimée.');
+      onDeleted?.();
+    } catch (err) {
+      pushErrorToast(err.message || 'La suppression a échoué.');
+      setDeleting(false);
+      setDeleteArmed(false);
+    }
   }
 
   async function handleUpload(e) {
@@ -129,8 +146,12 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
             </button>
           </div>
           {canEdit && sourceId && (
-            <button type="button" onClick={handleDelete} className="text-sm text-red-500 hover:text-red-700">
-              Supprimer la source
+            <button type="button" onClick={handleDelete} disabled={deleting} className="text-right text-sm text-red-500 hover:text-red-700 disabled:opacity-60">
+              {deleting
+                ? 'Suppression…'
+                : deleteArmed
+                  ? `Confirmer : supprimer la source${media.length ? `, ses ${media.length} scan(s)` : ''}${citations.length ? ` et ${citations.length} rattachement(s)` : ''}`
+                  : 'Supprimer la source'}
             </button>
           )}
         </div>

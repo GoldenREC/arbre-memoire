@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as auditModule from './auditEngine.js';
 import { detectDateAnomalies, detectPotentialDuplicates, detectDuplicateUnions, detectOrphans, runFullAudit } from './auditEngine.js';
 
 describe('detectDateAnomalies', () => {
@@ -241,5 +242,70 @@ describe('runFullAudit', () => {
       expect(curRank).toBeGreaterThanOrEqual(prevRank);
     }
     expect(result[0].severity).toBe('high');
+  });
+});
+
+describe('detectRepeatedUniqueEvents', () => {
+  const ctx = {
+    individualsById: new Map([['a', { id: 'a', firstNames: 'Mélanie', lastName: 'Aufrère' }], ['b', { id: 'b', firstNames: 'Philippe', lastName: 'Lalet' }]]),
+    partnersByUnion: new Map([['u1', ['a', 'b']]]),
+    placesById: new Map([['p1', 'Châteauponsac'], ['p2', 'Châteauneuf-la-Forêt']]),
+  };
+
+  it('signale en sévérité haute deux naissances qui se contredisent', () => {
+    const { detectRepeatedUniqueEvents } = auditModule;
+    const findings = detectRepeatedUniqueEvents([
+      { id: 'e1', subjectKind: 'individual', subjectId: 'a', eventType: 'birth', date: '1897-01-05', placeId: 'p1' },
+      { id: 'e2', subjectKind: 'individual', subjectId: 'a', eventType: 'birth', date: '1897-01-08', placeId: 'p2' },
+    ], ctx);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('high');
+    expect(findings[0].message).toContain('Châteauponsac');
+    expect(findings[0].individualIds).toEqual(['a']);
+  });
+
+  it("signale un même mariage enregistré trois fois sur une union, en nommant les deux conjoints", () => {
+    const { detectRepeatedUniqueEvents } = auditModule;
+    const marriage = { subjectKind: 'union', subjectId: 'u1', eventType: 'marriage', date: '1913-01-30', placeId: 'p2' };
+    const findings = detectRepeatedUniqueEvents([{ id: 'e1', ...marriage }, { id: 'e2', ...marriage }, { id: 'e3', ...marriage }], ctx);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('medium');
+    expect(findings[0].message).toContain('3 fois');
+    expect(findings[0].individualIds).toEqual(['a', 'b']);
+  });
+
+  it('ignore les événements répétables (résidence) et les événements uniques isolés', () => {
+    const { detectRepeatedUniqueEvents } = auditModule;
+    expect(detectRepeatedUniqueEvents([
+      { id: 'e1', subjectKind: 'individual', subjectId: 'a', eventType: 'residence', date: '1900-01-01' },
+      { id: 'e2', subjectKind: 'individual', subjectId: 'a', eventType: 'residence', date: '1910-01-01' },
+      { id: 'e3', subjectKind: 'individual', subjectId: 'a', eventType: 'birth', date: '1897-01-05' },
+    ], ctx)).toEqual([]);
+  });
+});
+
+describe('detectConflictingSources', () => {
+  const ctx = { individualsById: new Map([['a', { id: 'a', firstNames: 'Mélanie', lastName: 'Aufrère' }]]), partnersByUnion: new Map() };
+  const events = [{ id: 'e1', subjectKind: 'individual', subjectId: 'a', eventType: 'birth' }];
+  const src = (id, repository) => ({ id, title: 'Acte de naissance — Mélanie Aufrère', callNumber: 'acte n°1 du 08/01/1897', repository });
+
+  it('signale deux actes identiques rattachés au même événement avec deux dépôts différents', () => {
+    const { detectConflictingSources } = auditModule;
+    const findings = detectConflictingSources(
+      [src('s1', 'Archives de Châteauneuf-la-Forêt'), src('s2', 'Archives de Châteauponsac')],
+      [{ sourceId: 's1', eventId: 'e1' }, { sourceId: 's2', eventId: 'e1' }],
+      events, ctx
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].individualIds).toEqual(['a']);
+  });
+
+  it('ne signale rien si le dépôt est le même ou si les actes diffèrent', () => {
+    const { detectConflictingSources } = auditModule;
+    expect(detectConflictingSources(
+      [src('s1', 'Archives de Châteauponsac'), { ...src('s2', 'Archives de Paris'), callNumber: 'autre cote' }],
+      [{ sourceId: 's1', eventId: 'e1' }, { sourceId: 's2', eventId: 'e1' }],
+      events, ctx
+    )).toEqual([]);
   });
 });

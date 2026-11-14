@@ -49,7 +49,7 @@ export function eventCategoriesOf(source) {
 export function filterSources(sources, { search = '', proofKind = 'all', eventCategory = 'all' } = {}) {
   const needle = search.trim().toLowerCase();
   return sources.filter((s) => {
-    if (needle && !`${s.title} ${s.repository || ''} ${s.call_number || ''}`.toLowerCase().includes(needle)) return false;
+    if (needle && !`${s.title} ${s.repository || ''} ${s.call_number || ''} ${(s.subjects || []).join(' ')}`.toLowerCase().includes(needle)) return false;
     if (proofKind !== 'all' && proofKindOf(s) !== proofKind) return false;
     if (eventCategory !== 'all' && !eventCategoriesOf(s).includes(eventCategory)) return false;
     return true;
