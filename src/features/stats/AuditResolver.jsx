@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { describeEventVersions, keepEventVersion, versionChoices, bestProofLevel, deleteEvents } from './auditCorrections.js';
+import { describeEventVersions, keepEventVersion, versionChoices, bestProofLevel, deleteEvents, alignUnionStatusWithEvent } from './auditCorrections.js';
 import { deleteSource } from '../sources/sourcesMutations.js';
 import { PROOF_KIND_LABELS, proofKindOf } from '../sources/sourceFilters.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
@@ -83,6 +82,17 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
         setStaleArmed(false);
       }
     }
+    async function handleKeepEvent() {
+      setBusyId('align');
+      try {
+        await alignUnionStatusWithEvent(versions[0].event);
+        pushToast("Statut de l'union mis à jour.");
+        onChanged?.();
+      } catch (err) {
+        pushErrorToast(err.message || 'La correction a échoué.');
+        setBusyId(null);
+      }
+    }
     return (
       <div className="mt-2 space-y-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
         {versions.map((v) => (
@@ -97,13 +107,26 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
           </div>
         ))}
         <p className="text-xs text-neutral-500">
-          Si le statut est juste, supprime cet événement. Si c'est le statut qui est faux, corrige-le dans la{' '}
-          <Link to="/unions" className="text-accent-600 hover:underline dark:text-accent-400">revue des unions</Link>.
+          Le statut de l'union et cet événement se contredisent : l'événement est un reste d'ancien import, il n'apparaît que dans la
+          chronologie et sur la carte, pas dans la revue des unions. Choisis lequel a raison.
         </p>
         {canEdit && (
-          <button onClick={handleDeleteStale} disabled={busyId !== null} className="text-sm text-red-500 hover:text-red-700 disabled:opacity-60">
-            {busyId === 'stale' ? 'Suppression…' : staleArmed ? 'Confirmer la suppression de cet événement' : 'Supprimer cet événement'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleDeleteStale}
+              disabled={busyId !== null}
+              className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+            >
+              {busyId === 'stale' ? 'Suppression…' : staleArmed ? 'Confirmer : supprimer cet événement' : `Garder le statut actuel et supprimer ce {versions[0]?.event.eventType === 'divorce' ? 'divorce' : 'mariage'}`}
+            </button>
+            <button
+              onClick={handleKeepEvent}
+              disabled={busyId !== null}
+              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
+            >
+              {busyId === 'align' ? 'Enregistrement…' : `Garder ce {versions[0]?.event.eventType === 'divorce' ? 'divorce' : 'mariage'} et passer l'union en « ${versions[0]?.event.eventType === 'divorce' ? 'divorcée' : 'mariée'} »`}
+            </button>
+          </div>
         )}
       </div>
     );

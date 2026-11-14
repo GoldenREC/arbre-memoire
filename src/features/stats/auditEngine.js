@@ -393,7 +393,7 @@ export function detectStaleUnionEvents(unions, events, { individualsById, partne
       id: `stale-union-event:${key}`,
       kind: 'stale_union_event',
       severity: 'medium',
-      message: `${who} : l'union est déclarée « ${status} », mais un événement « ${STALE_EVENT_LABELS[group[0].eventType]} » y est encore enregistré${group[0].date ? ` (${group[0].date})` : ''}.`,
+      message: `${who} : l'union est déclarée « ${status} », mais un ancien événement « ${STALE_EVENT_LABELS[group[0].eventType]} » lui reste rattaché${group[0].date ? ` (${group[0].date})` : ''} et s'affiche encore dans la chronologie.`,
       individualIds,
       eventIds: group.map((e) => e.id),
     });

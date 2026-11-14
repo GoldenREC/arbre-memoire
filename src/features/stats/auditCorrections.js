@@ -169,6 +169,19 @@ export async function deleteEvents(eventIds) {
   if (error) throw error;
 }
 
+/**
+ * Résout un jalon contraire au statut en donnant raison à l'événement :
+ * l'union devient "mariée" (événement mariage) ou "divorcée" (événement
+ * divorce). Mêmes colonnes que le sélecteur de statut (unionMutations.js).
+ */
+export async function alignUnionStatusWithEvent(event) {
+  const patch = event.eventType === 'divorce'
+    ? { union_type: 'marriage', status: 'divorced', end_date: event.date || null, end_date_precision: event.datePrecision || 'unknown' }
+    : { union_type: 'marriage', status: 'ongoing' };
+  const { error } = await supabase.from('unions').update(patch).eq('id', event.subjectId);
+  if (error) throw error;
+}
+
 /** Fusionne en série les doublons strictement identiques (aucun choix à faire). Retourne le nombre de constats traités. */
 export async function mergeIdenticalFindings(findings, bundle, onProgress) {
   let done = 0;
