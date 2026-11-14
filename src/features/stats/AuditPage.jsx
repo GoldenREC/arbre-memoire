@@ -204,6 +204,9 @@ export default function AuditPage() {
                           → {fullName(individualsById.get(id))}
                         </Link>
                       ))}
+                      {(f.kind === 'duplicate_union_exact' || f.kind === 'duplicate_union_likely') && (
+                        <Link to="/unions" className="text-accent-600 hover:underline dark:text-accent-400">→ Revue des unions</Link>
+                      )}
                       {f.kind === 'potential_duplicate' && (
                         <button
                           onClick={() => setMergeCandidate({ aId: f.individualIds[0], bId: f.individualIds[1] })}

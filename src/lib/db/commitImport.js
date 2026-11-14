@@ -101,6 +101,9 @@ async function upsertIndividuals(individuals, treeId, importBatchId, placeIdMap)
     occupation: ind.occupation ?? null,
     biography: ind.biography ?? null,
     gedcom_xref: ind.gedcomXref ?? null,
+    // Surnom : seulement s'il est fourni, pour ne jamais effacer celui
+    // d'une fiche existante lors d'une mise à jour qui n'en parle pas.
+    ...(ind.nickname ? { nickname: ind.nickname } : {}),
     import_batch_id: importBatchId,
   });
 

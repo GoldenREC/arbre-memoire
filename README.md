@@ -360,3 +360,14 @@ et détection d'anomalies/doublons/fiches isolées
 npm run build
 npm run preview   # pour vérifier le build localement
 ```
+
+## Hébergement
+
+Le site de référence est **GitHub Pages** :
+<https://goldenrec.github.io/arbre-memoire/>. Chaque push sur `main`
+lance le workflow `.github/workflows/deploy-gh-pages.yml`, qui exécute
+les tests puis ne déploie que s'ils passent.
+
+Les fichiers `supabase/*.sql` s'exécutent à la main dans l'éditeur SQL
+de Supabase. Le dernier ajouté, `harden_search_path.sql`, est un
+durcissement facultatif.

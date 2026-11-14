@@ -32,6 +32,7 @@ function useSections() {
       items: [
         { to: '/statistiques', label: t('nav.statistics'), icon: '📊' },
         { to: '/audit', label: t('nav.audit'), icon: '🩺' },
+        { to: '/unions', label: t('nav.unionReview'), icon: '💍' },
       ],
     },
     {

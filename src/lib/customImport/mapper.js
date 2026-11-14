@@ -61,6 +61,7 @@ function mapIndividual(ind, placesMap, proofs) {
     firstNames: ind.firstNames || null,
     lastName: ind.lastName || null,
     birthName: ind.birthName || null,
+    nickname: ind.nickname || null,
     sex: ind.sex || 'U',
     birthDate: ind.birth?.date || null,
     birthDatePrecision: ind.birth?.datePrecision || (ind.birth?.date ? 'exact' : 'unknown'),

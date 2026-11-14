@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createPaginatingFetch } from './db/paginatingFetch.js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -16,4 +17,10 @@ if (!url || !anonKey) {
 // createClient rejette une URL vide immédiatement (avant même le premier
 // appel réseau) : sans placeholder valide, l'avertissement ci-dessus
 // n'aurait jamais le temps de s'afficher, l'app planterait au chargement.
-export const supabase = createClient(url || 'https://placeholder.supabase.co', anonKey || 'placeholder-anon-key');
+//
+// `global.fetch` : toutes les lectures passent par paginatingFetch, qui
+// relit page par page celles que Supabase aurait tronquées à 1 000 lignes
+// (voir lib/db/paginatingFetch.js).
+export const supabase = createClient(url || 'https://placeholder.supabase.co', anonKey || 'placeholder-anon-key', {
+  global: { fetch: createPaginatingFetch() },
+});

@@ -28,7 +28,7 @@ export async function loadStatsBundle(treeId) {
     supabase.from('filiations').select('id, child_id, parent_id, filiation_type'),
     supabase.from('unions').select('id, union_type, status, start_date, start_date_precision, place_id'),
     supabase.from('union_partners').select('union_id, individual_id'),
-    supabase.from('events').select('id, subject_kind, subject_id, event_type, event_date, proof_level, place_id'),
+    supabase.from('events').select('id, subject_kind, subject_id, event_type, event_date, date_precision, proof_level, place_id'),
     supabase.from('citations').select('id, source_id, event_id'),
     supabase.from('media').select('id, source_id, media_type'),
     supabase.from('places').select('id, raw_label, region, country'),
@@ -88,6 +88,7 @@ export async function loadStatsBundle(treeId) {
     subjectId: e.subject_id,
     eventType: e.event_type,
     date: e.event_date,
+    datePrecision: e.date_precision,
     proofLevel: e.proof_level,
     placeId: e.place_id,
   }));
