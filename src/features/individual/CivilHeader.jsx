@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import NmdBadges from './NmdBadges.jsx';
+import DatePartsInput from '../../components/ui/DatePartsInput.jsx';
+import StructuredPlaceInput, { EMPTY_PLACE } from '../../components/ui/StructuredPlaceInput.jsx';
+import { isPlaceEmpty } from '../../lib/utils/placeLabel.js';
+import { fetchStructuredPlace } from './individualMutations.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const SEX_OPTIONS = [
@@ -29,16 +33,50 @@ function initials(individual) {
 export default function CivilHeader({ individual, unions, places, canEdit, onSave, events, citations, treeId, onActsChanged }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => toFormState(individual, places));
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  function startEdit() {
-    setForm(toFormState(individual, places));
+  /**
+   * Les lieux structurés (les 9 champs) ne sont chargés qu'à l'ouverture
+   * de l'édition — places.get() ne porte que raw_label, qui suffit pour
+   * l'affichage en lecture mais pas pour pré-remplir StructuredPlaceInput
+   * champ par champ.
+   */
+  async function startEdit() {
+    const base = toFormState(individual, places);
+    setForm(base);
+    setLoadingPlaces(true);
     setEditing(true);
+    try {
+      const [birthPlace, deathPlace] = await Promise.all([
+        fetchStructuredPlace(individual.birthPlaceId),
+        fetchStructuredPlace(individual.deathPlaceId),
+      ]);
+      setForm((f) => ({ ...f, birthPlace: birthPlace || EMPTY_PLACE, deathPlace: deathPlace || EMPTY_PLACE }));
+    } catch (err) {
+      pushErrorToast(err.message);
+    } finally {
+      setLoadingPlaces(false);
+    }
   }
 
   async function handleSave() {
     setSaving(true);
     try {
+      // Un lieu importé d'un GEDCOM ou saisi via l'ancien champ libre n'a
+      // qu'un raw_label, pas de champs structurés : StructuredPlaceInput
+      // apparaît alors vide bien qu'un lieu soit déjà lié. Si la personne
+      // n'y touche pas, on laisse ce lieu inchangé plutôt que d'envoyer un
+      // lieu "vide" qui l'effacerait silencieusement — voir le message
+      // affiché au-dessus du champ dans ce cas.
+      const placesPatch = {};
+      if (!(isPlaceEmpty(form.birthPlace) && form.birthPlaceLegacyLabel && !form.birthPlaceTouched)) {
+        placesPatch.birth = form.birthPlace;
+      }
+      if (!(isPlaceEmpty(form.deathPlace) && form.deathPlaceLegacyLabel && !form.deathPlaceTouched)) {
+        placesPatch.death = form.deathPlace;
+      }
+
       await onSave(
         {
           firstNames: form.firstNames,
@@ -53,7 +91,7 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
           isDeceased: form.isDeceased,
           occupation: form.occupation,
         },
-        { birth: form.birthPlace, death: form.deathPlace }
+        placesPatch
       );
       setEditing(false);
       pushToast('Fiche enregistrée.');
@@ -72,6 +110,9 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
       : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300';
 
   if (editing) {
+    const birthPlaceLegacy = isPlaceEmpty(form.birthPlace) && form.birthPlaceLegacyLabel && !form.birthPlaceTouched;
+    const deathPlaceLegacy = isPlaceEmpty(form.deathPlace) && form.deathPlaceLegacyLabel && !form.deathPlaceTouched;
+
     return (
       <div className="rounded-xl border border-neutral-200 p-5 dark:border-neutral-800">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -85,20 +126,58 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
             </select>
           </Field>
           <Field label="Profession"><input className="field" value={form.occupation} onChange={set(setForm, 'occupation')} /></Field>
+        </div>
 
-          <Field label="Date de naissance"><input type="date" className="field" value={form.birthDate} onChange={set(setForm, 'birthDate')} /></Field>
-          <Field label="Précision">
-            <select className="field" value={form.birthDatePrecision} onChange={set(setForm, 'birthDatePrecision')}>
-              {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Lieu de naissance"><input className="field" value={form.birthPlace} onChange={set(setForm, 'birthPlace')} /></Field>
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <BlockField label="Date de naissance">
+              <DatePartsInput value={form.birthDate} onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))} disabled={loadingPlaces} />
+            </BlockField>
+            <Field label="Précision (naissance)">
+              <select className="field" value={form.birthDatePrecision} onChange={set(setForm, 'birthDatePrecision')}>
+                {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </div>
+          <BlockField label="Lieu de naissance">
+            {birthPlaceLegacy && (
+              <p className="mb-1.5 text-[11px] text-neutral-400">
+                Lieu actuel (non détaillé) : {form.birthPlaceLegacyLabel} — laissez les champs vides pour le conserver tel quel, ou renseignez-les pour le remplacer par une version détaillée.
+              </p>
+            )}
+            {loadingPlaces ? (
+              <p className="text-xs text-neutral-400">Chargement…</p>
+            ) : (
+              <StructuredPlaceInput value={form.birthPlace} onChange={(v) => setForm((f) => ({ ...f, birthPlace: v, birthPlaceTouched: true }))} />
+            )}
+          </BlockField>
 
           <Field label="Décédé(e) ?">
             <input type="checkbox" checked={form.isDeceased} onChange={(e) => setForm((f) => ({ ...f, isDeceased: e.target.checked }))} />
           </Field>
-          <Field label="Date de décès"><input type="date" className="field" value={form.deathDate} onChange={set(setForm, 'deathDate')} /></Field>
-          <Field label="Lieu de décès"><input className="field" value={form.deathPlace} onChange={set(setForm, 'deathPlace')} /></Field>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <BlockField label="Date de décès">
+              <DatePartsInput value={form.deathDate} onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))} disabled={loadingPlaces} />
+            </BlockField>
+            <Field label="Précision (décès)">
+              <select className="field" value={form.deathDatePrecision} onChange={set(setForm, 'deathDatePrecision')}>
+                {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </div>
+          <BlockField label="Lieu de décès">
+            {deathPlaceLegacy && (
+              <p className="mb-1.5 text-[11px] text-neutral-400">
+                Lieu actuel (non détaillé) : {form.deathPlaceLegacyLabel} — laissez les champs vides pour le conserver tel quel, ou renseignez-les pour le remplacer par une version détaillée.
+              </p>
+            )}
+            {loadingPlaces ? (
+              <p className="text-xs text-neutral-400">Chargement…</p>
+            ) : (
+              <StructuredPlaceInput value={form.deathPlace} onChange={(v) => setForm((f) => ({ ...f, deathPlace: v, deathPlaceTouched: true }))} />
+            )}
+          </BlockField>
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -180,6 +259,15 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
   );
 }
 
+/**
+ * État initial du formulaire. Les lieux structurés (birthPlace/
+ * deathPlace) sont posés à EMPTY_PLACE ici — startEdit() les remplace
+ * juste après par le résultat de fetchStructuredPlace(), chargé à part
+ * car places.get() (déjà en mémoire) ne porte que raw_label. Les
+ * *LegacyLabel/*Touched qui les accompagnent servent uniquement à ne
+ * pas écraser un lieu existant mais non détaillé si on ne le modifie
+ * pas (voir handleSave).
+ */
 function toFormState(individual, places) {
   return {
     firstNames: individual.firstNames || '',
@@ -190,11 +278,15 @@ function toFormState(individual, places) {
     occupation: individual.occupation || '',
     birthDate: individual.birthDate || '',
     birthDatePrecision: individual.birthDatePrecision || 'unknown',
-    birthPlace: individual.birthPlaceId ? places.get(individual.birthPlaceId) || '' : '',
+    birthPlace: EMPTY_PLACE,
+    birthPlaceLegacyLabel: individual.birthPlaceId ? places.get(individual.birthPlaceId) || '' : '',
+    birthPlaceTouched: false,
     isDeceased: !!individual.isDeceased,
     deathDate: individual.deathDate || '',
     deathDatePrecision: individual.deathDatePrecision || 'unknown',
-    deathPlace: individual.deathPlaceId ? places.get(individual.deathPlaceId) || '' : '',
+    deathPlace: EMPTY_PLACE,
+    deathPlaceLegacyLabel: individual.deathPlaceId ? places.get(individual.deathPlaceId) || '' : '',
+    deathPlaceTouched: false,
   };
 }
 
@@ -211,5 +303,15 @@ function Field({ label, children }) {
       <span className="mb-1 block">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Comme Field, mais en <div> plutôt qu'en <label> : pour un champ composite (plusieurs <select>/<input>, voir DatePartsInput/StructuredPlaceInput) qu'un <label> unique ne peut pas englober correctement. */
+function BlockField({ label, children }) {
+  return (
+    <div>
+      <span className="mb-1 block text-xs text-neutral-500 dark:text-neutral-400">{label}</span>
+      {children}
+    </div>
   );
 }
