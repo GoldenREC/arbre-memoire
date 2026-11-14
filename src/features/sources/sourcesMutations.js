@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 export async function listSources(treeId) {
   const { data, error } = await supabase
     .from('sources')
-    .select('id, title, repository, call_number, url, notes')
+    .select('id, title, repository, call_number, url, notes, source_type')
     .eq('tree_id', treeId)
     .order('title');
   if (error) throw error;
@@ -20,6 +20,7 @@ export async function createSource(treeId, patch) {
       call_number: patch.callNumber || null,
       url: patch.url || null,
       notes: patch.notes || null,
+      source_type: patch.sourceType || null,
     })
     .select('id')
     .single();
@@ -36,6 +37,7 @@ export async function updateSource(sourceId, patch) {
       call_number: patch.callNumber || null,
       url: patch.url || null,
       notes: patch.notes || null,
+      source_type: patch.sourceType || null,
     })
     .eq('id', sourceId);
   if (error) throw error;

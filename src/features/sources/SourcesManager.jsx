@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { listSources } from './sourcesMutations.js';
 import SourceDetailModal from './SourceDetailModal.jsx';
+import { SOURCE_TYPE_LABELS, isUnreliableSourceUrl } from '../../lib/utils/sourceReliability.js';
 
 /**
  * Point d'entrée du gestionnaire de sources : liste/recherche de
@@ -67,7 +68,19 @@ export default function SourcesManager() {
                 onClick={() => setEditing(s)}
                 className="flex w-full flex-col items-start gap-0.5 px-4 py-3 text-left hover:bg-neutral-50 dark:hover:bg-neutral-900"
               >
-                <span className="text-sm font-medium">{s.title}</span>
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  {s.title}
+                  {SOURCE_TYPE_LABELS[s.source_type] && (
+                    <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-normal text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+                      {SOURCE_TYPE_LABELS[s.source_type]}
+                    </span>
+                  )}
+                  {isUnreliableSourceUrl(s.url) && (
+                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="URL vers un arbre collaboratif — à vérifier/remplacer par une preuve primaire">
+                      ⚠ à vérifier
+                    </span>
+                  )}
+                </span>
                 <span className="text-xs text-neutral-400">
                   {[s.repository, s.call_number].filter(Boolean).join(' — ') || 'Aucune localisation renseignée'}
                 </span>

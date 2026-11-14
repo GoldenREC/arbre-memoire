@@ -5,6 +5,7 @@ import { createSource, updateSource, deleteSource, listMediaForSource, listCitat
 import { uploadMediaFile, getMediaSignedUrl, deleteMedia } from '../../lib/db/mediaStorage.js';
 import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
+import { SOURCE_TYPES, isUnreliableSourceUrl } from '../../lib/utils/sourceReliability.js';
 import ActViewer from './ActViewer.jsx';
 
 /**
@@ -21,8 +22,10 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
     callNumber: source?.call_number || '',
     url: source?.url || '',
     notes: source?.notes || '',
+    sourceType: source?.source_type || '',
   });
   const [saving, setSaving] = useState(false);
+  const urlUnreliable = isUnreliableSourceUrl(form.url);
   const [media, setMedia] = useState([]);
   const [citations, setCitations] = useState([]);
   const [viewing, setViewing] = useState(null);
@@ -38,6 +41,7 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
 
   async function handleSave(e) {
     e.preventDefault();
+    if (urlUnreliable) return; // garde-fou en plus du bouton désactivé (ex: soumission via Entrée)
     setSaving(true);
     try {
       if (isNew && !sourceId) {
@@ -82,6 +86,13 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
           Titre
           <input required className="field mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="ex: Registre paroissial de Grasse 1812" />
         </label>
+        <label className="block text-xs text-neutral-500">
+          Type de source
+          <select required className="field mt-1" value={form.sourceType} onChange={(e) => setForm((f) => ({ ...f, sourceType: e.target.value }))}>
+            <option value="" disabled>Choisir un type…</option>
+            {SOURCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-xs text-neutral-500">
             Dépôt / archives
@@ -96,6 +107,11 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
           URL
           <input className="field mt-1" value={form.url} onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." />
         </label>
+        {urlUnreliable && (
+          <p className="-mt-2 text-xs text-red-500">
+            Cette URL pointe vers un site d'arbre généalogique collaboratif (Geneanet, MyHeritage, Ancestry...), pas une preuve primaire. Remplace-la par un permalien d'archive, ou laisse le champ vide, pour pouvoir enregistrer.
+          </p>
+        )}
         <label className="block text-xs text-neutral-500">
           Notes
           <textarea className="field mt-1" rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
@@ -104,7 +120,7 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
         <div className="flex items-center justify-between pt-1">
           <div className="flex gap-2">
             {canEdit && (
-              <button type="submit" disabled={saving} className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60">
+              <button type="submit" disabled={saving || urlUnreliable} title={urlUnreliable ? "Corrige l'URL avant d'enregistrer" : undefined} className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60">
                 {saving ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             )}
