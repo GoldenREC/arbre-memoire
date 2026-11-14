@@ -294,6 +294,15 @@ export async function createUnion(treeId, individualId, partnerId, info = {}) {
 }
 
 export async function removeUnion(unionId) {
+  // events.subject_id est polymorphe (individu OU union, voir schema.sql) :
+  // pas de vraie contrainte FK possible, donc pas de ON DELETE CASCADE côté
+  // base pour les événements de cette union (mise en couple/mariage/
+  // divorce) — on les supprime explicitement avant l'union elle-même, sans
+  // quoi ils resteraient orphelins (leurs citations, elles, suivent via
+  // citations.event_id → events.id on delete cascade).
+  const { error: eventsErr } = await supabase.from('events').delete().eq('subject_kind', 'union').eq('subject_id', unionId);
+  if (eventsErr) throw eventsErr;
+
   const { error } = await supabase.from('unions').delete().eq('id', unionId);
   if (error) throw error; // ON DELETE CASCADE nettoie union_partners
 }

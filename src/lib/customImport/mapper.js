@@ -74,17 +74,26 @@ function mapIndividual(ind, placesMap, proofs) {
   };
 }
 
+/** Type d'union résolu : explicite (u.unionType) sinon déduit de u.status — on ne présume jamais un mariage par défaut (voir docs/IMPORT_FORMAT.md). */
+function resolveUnionType(u) {
+  if (u.unionType) return u.unionType;
+  if (u.status === 'divorced' || u.status === 'widowed') return 'marriage'; // on ne peut divorcer/être veuf que d'un mariage
+  return 'unknown';
+}
+
 function mapUnion(u, placesMap, proofs) {
   const placeLocalId = registerPlace(placesMap, u.place);
+  const unionType = resolveUnionType(u);
+  const isMarriage = unionType === 'marriage';
 
   if (u.proof) {
     proofs.push({
       subjectKind: 'union',
       subjectLocalId: u.localId,
-      eventType: 'marriage',
+      eventType: isMarriage ? 'marriage' : 'union_start',
       snapshot: { date: u.startDate || null, datePrecision: u.startDatePrecision || 'unknown', placeLocalId },
       proof: u.proof,
-      title: 'Acte de mariage',
+      title: isMarriage ? 'Acte de mariage' : 'Mise en couple',
     });
   }
   // Preuve distincte pour le divorce (jugement) — rattachée à l'événement
@@ -104,7 +113,7 @@ function mapUnion(u, placesMap, proofs) {
   return {
     localId: u.localId,
     partnerLocalIds: u.partners,
-    unionType: 'marriage',
+    unionType,
     status: u.status || 'unknown',
     startDate: u.startDate || null,
     startDatePrecision: u.startDatePrecision || (u.startDate ? 'exact' : 'unknown'),

@@ -12,6 +12,7 @@ const SEX_VALUES = ['M', 'F', 'U'];
 const DATE_PRECISION_VALUES = ['exact', 'about', 'before', 'after', 'unknown'];
 const PROOF_TYPE_VALUES = ['acte', 'family'];
 const UNION_STATUS_VALUES = ['ongoing', 'divorced', 'widowed', 'annulled', 'unknown'];
+const UNION_TYPE_VALUES = ['marriage', 'civil_union', 'cohabitation', 'unknown'];
 const FILIATION_TYPE_VALUES = [
   'biological',
   'adoption_plenary',
@@ -157,6 +158,9 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
     }
     if (u.status !== undefined && !UNION_STATUS_VALUES.includes(u.status)) {
       errors.push(`${label}.status : "${u.status}" invalide (attendu : ${UNION_STATUS_VALUES.join('|')}).`);
+    }
+    if (u.unionType !== undefined && !UNION_TYPE_VALUES.includes(u.unionType)) {
+      errors.push(`${label}.unionType : "${u.unionType}" invalide (attendu : ${UNION_TYPE_VALUES.join('|')}).`);
     }
     validateDateFacts(
       { date: u.startDate, datePrecision: u.startDatePrecision, place: u.place, proof: u.proof },

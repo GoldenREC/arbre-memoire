@@ -7,7 +7,7 @@ import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofL
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const EVENT_ICONS = {
-  birth: '👶', death: '⚰️', marriage: '💍', divorce: '💔', engagement: '💞',
+  birth: '👶', death: '⚰️', union_start: '💑', marriage: '💍', divorce: '💔', engagement: '💞',
   baptism: '⛲', burial: '🪦', residence: '🏠', immigration: '✈️', emigration: '🛳️',
   occupation: '💼', education: '🎓', military: '🎖️', religion: '⛪', custom: '📌',
 };

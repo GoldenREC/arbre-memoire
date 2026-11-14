@@ -181,6 +181,22 @@ describe('validateCustomImport', () => {
     expect(validateCustomImport(model).some((e) => e.includes('.status'))).toBe(true);
   });
 
+  it('accepte un unionType valide sur une union', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], unionType: 'cohabitation' }],
+    };
+    expect(validateCustomImport(model)).toEqual([]);
+  });
+
+  it('refuse un unionType invalide', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], unionType: 'fiancailles' }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('.unionType'))).toBe(true);
+  });
+
   it('refuse un endDate mal formé sur une union', () => {
     const model = {
       individuals: [{ localId: 'p1' }, { localId: 'p2' }],

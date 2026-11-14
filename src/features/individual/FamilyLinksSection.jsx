@@ -5,6 +5,8 @@ import {
   addParentLink, addChildLink, removeFiliation, createUnion, removeUnion,
 } from './individualMutations.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
+import UnionStatusForm from './UnionStatusForm.jsx';
+import { RELATIONSHIP_STATUS_LABELS, relationshipStatusFromUnion } from './unionMutations.js';
 
 export const FILIATION_LABELS = {
   biological: 'Biologique',
@@ -44,11 +46,11 @@ function PersonLink({ individual }) {
  * enfants, avec ajout/retrait direct — c'est ici que se construit (ou
  * se corrige) le graphe que consomment les vues de l'arbre.
  */
-export default function FamilyLinksSection({ individual, treeId, parents, unions, childGroups, canEdit, onChanged }) {
+export default function FamilyLinksSection({ individual, treeId, parents, unions, childGroups, events, canEdit, onChanged }) {
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <ParentsBlock individualId={individual.id} treeId={treeId} parents={parents} canEdit={canEdit} onChanged={onChanged} />
-      <UnionsBlock individualId={individual.id} treeId={treeId} unions={unions} canEdit={canEdit} onChanged={onChanged} />
+      <UnionsBlock individualId={individual.id} treeId={treeId} unions={unions} events={events} canEdit={canEdit} onChanged={onChanged} />
       <ChildrenBlock individualId={individual.id} treeId={treeId} unions={unions} childGroups={childGroups} canEdit={canEdit} onChanged={onChanged} />
     </div>
   );
@@ -122,15 +124,17 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
   );
 }
 
-function UnionsBlock({ individualId, treeId, unions, canEdit, onChanged }) {
+function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
+  const [editingUnionId, setEditingUnionId] = useState(null);
 
   async function handleSelect(person) {
     try {
-      await createUnion(treeId, individualId, person.id, {});
+      const unionId = await createUnion(treeId, individualId, person.id, {});
       setAdding(false);
       onChanged?.();
-      pushToast('Union ajoutée.');
+      pushToast('Union ajoutée — précise son statut ci-dessous.');
+      setEditingUnionId(unionId);
     } catch (err) {
       pushErrorToast(err.message);
     }
@@ -149,15 +153,33 @@ function UnionsBlock({ individualId, treeId, unions, canEdit, onChanged }) {
     <Block title="Conjoints / Unions" onAdd={canEdit ? () => setAdding((v) => !v) : null} addLabel={adding ? 'Annuler' : '+ Ajouter un conjoint'}>
       {unions.length === 0 && <p className="text-sm text-neutral-400">Aucune union enregistrée.</p>}
       {unions.map((u) => (
-        <div key={u.id} className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-1.5">
-            <PersonLink individual={u.partner} />
-            {u.status === 'divorced' && <span className="text-xs text-neutral-400">(divorcé·e·s)</span>}
+        <div key={u.id}>
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-1.5">
+              <PersonLink individual={u.partner} />
+              <span className="text-xs text-neutral-400">({RELATIONSHIP_STATUS_LABELS[relationshipStatusFromUnion(u)]})</span>
+            </div>
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditingUnionId((id) => (id === u.id ? null : u.id))} className="text-xs text-neutral-400 hover:text-accent-600">
+                  {editingUnionId === u.id ? 'fermer' : 'modifier'}
+                </button>
+                <button onClick={() => handleRemove(u.id)} className="text-xs text-neutral-400 hover:text-red-500">
+                  retirer
+                </button>
+              </div>
+            )}
           </div>
-          {canEdit && (
-            <button onClick={() => handleRemove(u.id)} className="text-xs text-neutral-400 hover:text-red-500">
-              retirer
-            </button>
+          {editingUnionId === u.id && (
+            <div className="mt-2">
+              <UnionStatusForm
+                treeId={treeId}
+                union={u}
+                unionEvents={(events || []).filter((e) => e.origin === 'union' && e.unionId === u.id)}
+                onSaved={() => { setEditingUnionId(null); onChanged?.(); }}
+                onCancel={() => setEditingUnionId(null)}
+              />
+            </div>
           )}
         </div>
       ))}

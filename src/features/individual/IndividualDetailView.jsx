@@ -76,6 +76,7 @@ export default function IndividualDetailView() {
           parents={parents}
           unions={unions}
           childGroups={childGroups}
+          events={events}
           canEdit={canEdit}
           onChanged={reload}
         />

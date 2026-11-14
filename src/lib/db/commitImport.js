@@ -296,10 +296,15 @@ async function insertDerivedEvents(individuals, families, treeId, individualIdMa
   for (const fam of families) {
     const subjectId = unionIdMap.get(fam.localId);
     if (!subjectId) continue;
-    if (fam.unionType === 'marriage' || fam.startDate) {
+    // Une union n'est pas forcément un mariage (en couple/concubinage...) —
+    // on ne crée un événement "marriage" que si le type résolu l'est
+    // vraiment (voir mapper.js:resolveUnionType) ; sinon, la même date
+    // décrit une "mise en couple" (événement distinct, event_type_enum).
+    if (fam.startDate || fam.placeLocalId) {
       rows.push({
         tree_id: treeId, subject_kind: 'union', subject_id: subjectId,
-        event_type: 'marriage', event_date: fam.startDate ?? null,
+        event_type: fam.unionType === 'marriage' ? 'marriage' : 'union_start',
+        event_date: fam.startDate ?? null,
         date_precision: fam.startDatePrecision ?? 'unknown',
         place_id: fam.placeLocalId ? placeIdMap.get(fam.placeLocalId) ?? null : null,
       });

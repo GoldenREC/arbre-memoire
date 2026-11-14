@@ -1,0 +1,20 @@
+-- =====================================================================
+-- MISE EN COUPLE — nouveau type d'événement pour les unions
+-- =====================================================================
+-- Une union n'est pas forcément un mariage : deux personnes peuvent
+-- être "en couple" (concubinage) sans jamais se marier, et le passage
+-- en couple -> mariage -> divorce se fait à des dates différentes (ex:
+-- 20 ans de vie commune avant le mariage). Ce fichier ajoute
+-- 'union_start' (« mise en couple ») à event_type_enum, pour
+-- représenter ce jalon comme un événement à part entière — au même
+-- titre que 'marriage' et 'divorce', déjà existants — plutôt que de
+-- présumer que toute union est un mariage (voir le correctif apporté à
+-- src/lib/customImport/mapper.js et src/lib/db/commitImport.js dans le
+-- même commit : l'import ne force plus union_type: 'marriage').
+--
+-- IMPORTANT : exécute CE FICHIER SEUL, en premier, avant toute autre
+-- requête qui utiliserait cette nouvelle valeur — PostgreSQL interdit
+-- d'utiliser une valeur d'enum fraîchement ajoutée dans la même
+-- transaction que celle qui l'a créée.
+-- =====================================================================
+alter type event_type_enum add value if not exists 'union_start';

@@ -138,14 +138,42 @@ describe('mapCustomImportToStagingModel', () => {
     ]);
   });
 
-  it("extrait la preuve de mariage avec subjectKind 'union'", () => {
+  it("extrait la preuve de mariage avec subjectKind 'union' quand unionType: 'marriage' est explicite", () => {
     const model = mapCustomImportToStagingModel({
       individuals: [{ localId: 'a' }, { localId: 'b' }],
-      unions: [{ localId: 'u1', partners: ['a', 'b'], proof: { type: 'acte', url: 'https://archives/mariage' } }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], unionType: 'marriage', proof: { type: 'acte', url: 'https://archives/mariage' } }],
     });
+    expect(model.families).toEqual([expect.objectContaining({ localId: 'u1', unionType: 'marriage' })]);
     expect(model.proofs).toEqual([
       expect.objectContaining({ subjectKind: 'union', subjectLocalId: 'u1', eventType: 'marriage' }),
     ]);
+  });
+
+  it("une union sans unionType ni status 'divorced'/'widowed' n'est jamais présumée mariage (reste 'unknown', preuve en 'union_start')", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], proof: { type: 'family', transcription: 'En couple depuis 2020' } }],
+    });
+    expect(model.families).toEqual([expect.objectContaining({ localId: 'u1', unionType: 'unknown' })]);
+    expect(model.proofs).toEqual([
+      expect.objectContaining({ subjectKind: 'union', subjectLocalId: 'u1', eventType: 'union_start' }),
+    ]);
+  });
+
+  it("une union 'divorced' est déduite comme mariage même sans unionType explicite", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], status: 'divorced' }],
+    });
+    expect(model.families).toEqual([expect.objectContaining({ localId: 'u1', unionType: 'marriage', status: 'divorced' })]);
+  });
+
+  it("unionType: 'cohabitation' explicite est respecté", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], unionType: 'cohabitation' }],
+    });
+    expect(model.families).toEqual([expect.objectContaining({ localId: 'u1', unionType: 'cohabitation' })]);
   });
 
   it("mappe endDate/endDatePrecision d'une union divorcée", () => {

@@ -3,7 +3,7 @@ import Modal from '../../components/ui/Modal.jsx';
 import { PROOF_LEVELS } from '../../lib/utils/proofLevel.js';
 
 export const EVENT_TYPE_LABELS = {
-  birth: 'Naissance', death: 'Décès', marriage: 'Mariage', divorce: 'Divorce',
+  birth: 'Naissance', death: 'Décès', union_start: 'Mise en couple', marriage: 'Mariage', divorce: 'Divorce',
   engagement: 'Fiançailles', baptism: 'Baptême', burial: 'Inhumation',
   residence: 'Résidence', immigration: 'Immigration', emigration: 'Émigration',
   occupation: 'Profession', education: 'Études', military: 'Service militaire',

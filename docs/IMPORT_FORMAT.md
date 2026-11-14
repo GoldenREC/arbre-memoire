@@ -65,14 +65,16 @@ français classique).
 
 ### 2.2 `unions[]`
 
-Une entrée par mariage transcrit (acte de mariage).
+Une entrée par couple : mariage transcrit, ou simple mise en couple/
+concubinage (pas de preuve d'union qu'un mariage).
 
 | Champ | Type | Obligatoire | Notes |
 |---|---|---|---|
 | `localId` | string | **oui** | Unique dans ce fichier |
 | `partners` | array de `localId` | **oui** | 2 `localId` présents dans `individuals[]`. Si un conjoint n'a pas de fiche détaillée (acte non transcrit), créer quand même une entrée minimale dans `individuals[]` pour lui (voir §2.6) plutôt qu'un champ à part. |
+| `unionType` | `"marriage"` \| `"civil_union"` \| `"cohabitation"` \| `"unknown"` | non | **Ne pas omettre dès qu'on sait que ce n'est pas un mariage** — sans ce champ, un `status: "divorced"`/`"widowed"` est déduit comme mariage (seul cas où on peut divorcer/être veuf), sinon le type reste `"unknown"` (jamais présumé `"marriage"` par défaut). |
 | `status` | `"ongoing"` \| `"divorced"` \| `"widowed"` \| `"annulled"` \| `"unknown"` | non (défaut `"ongoing"`) | Mettre `"divorced"` dès qu'un jugement de divorce est transcrit |
-| `startDate`, `startDatePrecision`, `place`, `proof` | — | non | Mêmes champs qu'un `DateFacts` (§2.3), sans l'imbrication — directement au niveau de l'union. `proof` ici est la preuve de **l'acte de mariage**. |
+| `startDate`, `startDatePrecision`, `place`, `proof` | — | non | Mêmes champs qu'un `DateFacts` (§2.3), sans l'imbrication — directement au niveau de l'union. Une seule date/lieu par union dans ce format : pour un `unionType: "marriage"`, c'est la date de **mariage** ; sinon (en couple, inconnu), c'est la date de **mise en couple**. `proof` suit la même règle (acte de mariage, ou simple preuve familiale de mise en couple). |
 | `endDate` | string (ISO) \| null | non | Date du jugement de divorce (si `status: "divorced"`) |
 | `endDatePrecision` | `"exact"` \| `"about"` \| `"before"` \| `"after"` \| `"unknown"` | non (défaut `"exact"` si `endDate` fourni) | |
 | `divorceProof` | objet `proof` \| null | non | Preuve du **jugement de divorce** — même forme que `proof` (§2.5), mais distincte : elle sera rattachée à l'événement "divorce", pas à l'acte de mariage. Le tribunal et la date de transcription du jugement, s'ils sont connus, vont dans `divorceProof.transcription` (texte libre). |
@@ -393,6 +395,6 @@ imports séparés sont donc détectés et proposés à la fusion.
 Avant toute écriture en base, le fichier est entièrement validé côté
 navigateur : `localId` uniques, références `parents`/`partners`
 résolues, fichiers `imageFile` bien présents dans le zip, valeurs
-d'énumération valides (`sex`, `datePrecision`, `proof.type`, `status`).
+d'énumération valides (`sex`, `datePrecision`, `proof.type`, `status`, `unionType`).
 En cas d'erreur, rien n'est importé — la liste des erreurs est affichée
 pour correction.
