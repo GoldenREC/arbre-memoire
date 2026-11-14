@@ -19,5 +19,11 @@ export default function App() {
 
   useUiLanguageSync();
 
-  return <RouterProvider router={router} />;
+  return (
+    // useTransitions={false} : les changements de page sont appliqués
+    // immédiatement. Avec les transitions React (comportement par défaut de
+    // React Router 7), quitter la page Statistiques restait bloqué : l'adresse
+    // changeait mais l'ancienne page restait affichée jusqu'au rechargement.
+    <RouterProvider router={router} useTransitions={false} />
+  );
 }
