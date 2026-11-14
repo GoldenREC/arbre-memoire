@@ -169,7 +169,7 @@ export default function AuditPage() {
           disabled={cleanup.running}
           className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-200 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-200"
         >
-          {cleanup.running ? 'Nettoyage en cours…' : 'Nettoyer les doublons (lieux, événements, unions, sources)'}
+          {cleanup.running ? 'Nettoyage en cours…' : 'Nettoyer les doublons (lieux, événements, unions, sources, scans)'}
         </button>
         {cleanup.result && (
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -180,6 +180,7 @@ export default function AuditPage() {
             {cleanup.result.sourcesRemoved === null
               ? `. Sources non traitées (${cleanup.result.sourcesError || 'erreur inconnue'}) : vérifie que supabase/dedupe_sources.sql est bien exécuté.`
               : `, ${cleanup.result.sourcesRemoved} source(s) en double supprimée(s).`}
+            {cleanup.result.scansRemoved === null ? ' Scans en double non traités.' : ` ${cleanup.result.scansRemoved} scan(s) en double supprimé(s).`}
             {cleanup.result.proofLevelsRaised ? ` ${cleanup.result.proofLevelsRaised} indice(s) de preuve relevé(s).` : ''}
           </span>
         )}

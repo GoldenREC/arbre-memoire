@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { DEFAULT_ENHANCE, EnhancePanel, SharpenFilterDef, enhanceFilterCss, isEnhanced } from '../../components/ui/ImageEnhance.jsx';
 import { getMediaSignedUrl, updateMediaInfo } from '../../lib/db/mediaStorage.js';
 
 const FILTERS = [
@@ -27,6 +28,11 @@ export default function ActViewer({ media, mediaList, canEdit, onClose, onChange
   const [rotation, setRotation] = useState(0);
   const [filter, setFilter] = useState('none');
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // Amélioration d'image : conservée d'une page à l'autre d'un même acte.
+  const [enhance, setEnhance] = useState(DEFAULT_ENHANCE);
+  const [enhanceOpen, setEnhanceOpen] = useState(false);
+  const [naturalSize, setNaturalSize] = useState(null);
+  const sharpenId = `sharpen-${useId().replace(/:/g, '')}`;
   const [transcription, setTranscription] = useState(current.description || '');
   const [saving, setSaving] = useState(false);
   const dragRef = useRef(null);
@@ -41,6 +47,7 @@ export default function ActViewer({ media, mediaList, canEdit, onClose, onChange
     setRotation(0);
     setFilter('none');
     setPan({ x: 0, y: 0 });
+    setNaturalSize(null);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current.id, current.storage_path]);
@@ -90,7 +97,7 @@ export default function ActViewer({ media, mediaList, canEdit, onClose, onChange
     }
   }
 
-  const filterCss = FILTERS.find((f) => f.value === filter)?.css || 'none';
+  const filterCss = enhanceFilterCss(enhance, sharpenId, FILTERS.find((f) => f.value === filter)?.css || 'none');
 
   return (
     <div className="fixed inset-0 z-50 flex bg-black/80">
@@ -129,6 +136,7 @@ export default function ActViewer({ media, mediaList, canEdit, onClose, onChange
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
+        <SharpenFilterDef id={sharpenId} amount={enhance.sharpen} />
         {url ? (
           <img
             src={url}
@@ -136,15 +144,21 @@ export default function ActViewer({ media, mediaList, canEdit, onClose, onChange
             className={`max-h-full max-w-full select-none transition-transform ${zoom > 1 ? 'cursor-move' : ''}`}
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`, filter: filterCss }}
             draggable={false}
+            onLoad={(e) => setNaturalSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
           />
         ) : (
           <p className="text-sm text-white/60">Chargement de l'image…</p>
         )}
 
-        <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full bg-black/60 px-3 py-2 text-white">
+        {enhanceOpen && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2" onMouseDown={(e) => e.stopPropagation()}>
+            <EnhancePanel value={enhance} onChange={setEnhance} naturalSize={naturalSize} />
+          </div>
+        )}
+        <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full bg-black/60 px-3 py-2 text-white" onMouseDown={(e) => e.stopPropagation()}>
           <button onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))} className="px-2 hover:text-accent-300">−</button>
           <span className="text-xs">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((z) => Math.min(4, z + 0.25))} className="px-2 hover:text-accent-300">+</button>
+          <button onClick={() => setZoom((z) => Math.min(8, z + 0.25))} className="px-2 hover:text-accent-300">+</button>
           <span className="mx-1 h-4 w-px bg-white/30" />
           <button onClick={() => setRotation((r) => r - 90)} className="px-2 hover:text-accent-300" title="Pivoter à gauche">⟲</button>
           <button onClick={() => setRotation((r) => r + 90)} className="px-2 hover:text-accent-300" title="Pivoter à droite">⟳</button>
@@ -158,6 +172,15 @@ export default function ActViewer({ media, mediaList, canEdit, onClose, onChange
           >
             {FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
+          <span className="mx-1 h-4 w-px bg-white/30" />
+          <button
+            onClick={() => setEnhanceOpen((o) => !o)}
+            aria-expanded={enhanceOpen}
+            className={`rounded px-2 py-0.5 text-xs ${isEnhanced(enhance) ? 'bg-accent-600 text-white' : 'hover:text-accent-300'}`}
+            title="Netteté, contraste, luminosité"
+          >
+            Améliorer
+          </button>
         </div>
       </div>
 

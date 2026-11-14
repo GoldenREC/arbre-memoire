@@ -7,6 +7,7 @@
  */
 import { supabase } from '../../lib/supabaseClient.js';
 import { refreshAllProofLevels } from '../../lib/db/proofLevelSync.js';
+import { removeDuplicateScans } from '../../lib/db/duplicateScans.js';
 
 export async function cleanupTreeEventDuplicates(treeId) {
   // Lieux d'abord (supabase/dedupe_events_by_place_label.sql) : deux
@@ -39,7 +40,16 @@ export async function cleanupTreeEventDuplicates(treeId) {
     proofLevelsRaised = null;
   }
 
+  // Scans en double sur une même source (même fichier, même poids).
+  let scansRemoved = null;
+  try {
+    scansRemoved = await removeDuplicateScans(treeId);
+  } catch {
+    scansRemoved = null;
+  }
+
   return {
+    scansRemoved,
     proofLevelsRaised,
     unionsMerged: row?.unions_merged ?? 0,
     eventsRemoved: row?.events_removed ?? 0,
