@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectDateAnomalies, detectPotentialDuplicates, detectOrphans, runFullAudit } from './auditEngine.js';
+import { detectDateAnomalies, detectPotentialDuplicates, detectDuplicateUnions, detectOrphans, runFullAudit } from './auditEngine.js';
 
 describe('detectDateAnomalies', () => {
   it('signale un décès antérieur à la naissance', () => {
@@ -127,6 +127,76 @@ describe('detectPotentialDuplicates', () => {
   it('ignore les individus sans nom', () => {
     const individuals = [{ id: 'a', firstNames: '', lastName: '', birthDate: '1900-01-01' }];
     expect(detectPotentialDuplicates(individuals)).toEqual([]);
+  });
+
+  it('attrape une variante de transcription du nom (similarité floue, pas seulement l\'égalité stricte)', () => {
+    const individuals = [
+      { id: 'a', firstNames: 'Charles', lastName: 'Ternay', birthDate: '1905-02-23', sex: 'M' },
+      { id: 'b', firstNames: 'Charles', lastName: 'Ternaye', birthDate: '1905-02-23', sex: 'M' }, // faute de transcription
+    ];
+    const findings = detectPotentialDuplicates(individuals);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].individualIds).toEqual(['a', 'b']);
+  });
+
+  it('ne signale rien pour deux noms trop différents malgré une date identique', () => {
+    const individuals = [
+      { id: 'a', firstNames: 'Charles', lastName: 'Ternay', birthDate: '1905-02-23', sex: 'M' },
+      { id: 'b', firstNames: 'Marguerite', lastName: 'Couteau', birthDate: '1905-02-23', sex: 'F' },
+    ];
+    expect(detectPotentialDuplicates(individuals)).toEqual([]);
+  });
+});
+
+describe('detectDuplicateUnions', () => {
+  function byId(individuals) {
+    return new Map(individuals.map((i) => [i.id, i]));
+  }
+
+  it('signale deux unions partageant exactement les mêmes partenaires', () => {
+    const individuals = [
+      { id: 'a', firstNames: 'Charles', lastName: 'Ternay', sex: 'M' },
+      { id: 'b', firstNames: 'Eugénie', lastName: 'Cropet', sex: 'F' },
+    ];
+    const unions = [{ id: 'u1' }, { id: 'u2' }];
+    const partnersByUnion = new Map([['u1', ['a', 'b']], ['u2', ['a', 'b']]]);
+    const findings = detectDuplicateUnions(unions, partnersByUnion, byId(individuals));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].kind).toBe('duplicate_union_exact');
+    expect(findings[0].severity).toBe('high');
+  });
+
+  it("signale deux unions probablement dupliquées quand l'un des conjoints existe en double (fiches distinctes, noms très proches)", () => {
+    const individuals = [
+      { id: 'a1', firstNames: 'Charles', lastName: 'Ternay', birthDate: '1905-02-23', sex: 'M' },
+      { id: 'a2', firstNames: 'Charles', lastName: 'Ternaye', birthDate: '1905-02-23', sex: 'M' }, // doublon de a1
+      { id: 'b', firstNames: 'Eugénie', lastName: 'Cropet', birthDate: '1906-12-07', sex: 'F' },
+    ];
+    const unions = [{ id: 'u1' }, { id: 'u2' }];
+    const partnersByUnion = new Map([['u1', ['a1', 'b']], ['u2', ['a2', 'b']]]);
+    const findings = detectDuplicateUnions(unions, partnersByUnion, byId(individuals));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].kind).toBe('duplicate_union_likely');
+    expect(findings[0].severity).toBe('medium');
+    expect(findings[0].individualIds).toEqual(expect.arrayContaining(['a1', 'a2', 'b']));
+  });
+
+  it('ne signale rien pour deux unions clairement différentes', () => {
+    const individuals = [
+      { id: 'a', firstNames: 'Charles', lastName: 'Ternay', sex: 'M' },
+      { id: 'b', firstNames: 'Eugénie', lastName: 'Cropet', sex: 'F' },
+      { id: 'c', firstNames: 'Marguerite', lastName: 'Couteau', sex: 'F' },
+    ];
+    const unions = [{ id: 'u1' }, { id: 'u2' }];
+    const partnersByUnion = new Map([['u1', ['a', 'b']], ['u2', ['a', 'c']]]);
+    expect(detectDuplicateUnions(unions, partnersByUnion, byId(individuals))).toEqual([]);
+  });
+
+  it('ignore les unions à un seul partenaire connu (rien à comparer de façon fiable)', () => {
+    const individuals = [{ id: 'a', firstNames: 'Charles', lastName: 'Ternay' }];
+    const unions = [{ id: 'u1' }, { id: 'u2' }];
+    const partnersByUnion = new Map([['u1', ['a']], ['u2', ['a']]]);
+    expect(detectDuplicateUnions(unions, partnersByUnion, byId(individuals))).toEqual([]);
   });
 });
 

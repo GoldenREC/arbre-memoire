@@ -16,6 +16,8 @@ const KIND_LABELS = {
   child_born_after_parent_death: "Naissance après le décès d'un parent",
   marriage_aberrant_age: 'Mariage à un âge aberrant',
   potential_duplicate: 'Doublon potentiel',
+  duplicate_union_exact: 'Unions en double (mêmes partenaires)',
+  duplicate_union_likely: 'Unions probablement en double',
   orphan: 'Fiche isolée',
 };
 
