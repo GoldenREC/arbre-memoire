@@ -84,6 +84,67 @@ export async function deleteHistoricalAlias(id) {
   if (error) throw error;
 }
 
+/**
+ * Niveaux de géocodage en cascade pour un lieu structuré (voir
+ * supabase/places_structured.sql) : du plus précis (adresse complète —
+ * numéro + rue, bâtiment/lieu-dit, arrondissement, commune/code postal,
+ * département, région, pays) au plus général (pays seul). Chaque niveau
+ * correspond à une requête Nominatim ; si l'API ne reconnaît pas le
+ * niveau le plus précis (numéro de rue introuvable, lieu-dit disparu...),
+ * geocodePlace() retire automatiquement ce niveau et retente avec le
+ * niveau juste au-dessus, jusqu'au pays seul.
+ *
+ * Pour un lieu sans aucun champ structuré (import GEDCOM, ancien champ
+ * libre), un seul niveau est renvoyé à partir de raw_label — exactement
+ * le comportement d'avant cette fonctionnalité, précision inconnue
+ * (`null`).
+ */
+export function buildGeocodeLevels(place) {
+  const fields = [
+    { precision: 'street', text: [place.street_number, place.street_name].filter(Boolean).join(' ') },
+    { precision: 'building', text: place.building_name || '' },
+    { precision: 'arrondissement', text: place.arrondissement || '' },
+    { precision: 'city', text: [place.postal_code, place.city].filter(Boolean).join(' ') },
+    { precision: 'department', text: place.department && place.department !== place.city ? place.department : '' },
+    { precision: 'region', text: place.region && place.region !== place.department ? place.region : '' },
+    { precision: 'country', text: place.country || '' },
+  ].filter((f) => f.text);
+
+  if (!fields.length) return [{ precision: null, query: place.raw_label }];
+
+  return fields.map((_, i) => ({
+    precision: fields[i].precision,
+    query: fields.slice(i).map((f) => f.text).join(', '),
+  }));
+}
+
+/** Libellés d'affichage des niveaux de précision — panneau "Lieux à résoudre" et marqueurs de la carte. */
+export const GEOCODE_PRECISION_LABELS = {
+  street: 'Adresse',
+  building: 'Bâtiment / lieu-dit',
+  arrondissement: 'Arrondissement',
+  city: 'Commune',
+  department: 'Département',
+  region: 'Région',
+  country: 'Pays',
+  alias: 'Correspondance historique',
+};
+
+/**
+ * Un pin "approximatif" (département, région ou pays seul) peut être
+ * très loin du lieu réel — contrairement à une commune, qui reste une
+ * précision tout à fait normale pour un acte généalogique. Sert à
+ * distinguer visuellement ces cas sur la carte plutôt que de les
+ * afficher comme n'importe quel autre pin résolu.
+ */
+export function isApproximateGeocodePrecision(precision) {
+  return precision === 'department' || precision === 'region' || precision === 'country';
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Un seul appel Nominatim — ne pas boucler sans délai (voir geocodeAllPendingPlaces). */
 async function geocodeViaNominatim(query) {
   const url = new URL(NOMINATIM_URL);
@@ -108,8 +169,14 @@ async function geocodeViaNominatim(query) {
 
 /**
  * Résout un lieu (ligne de la table `places`) : correspondance
- * historique si elle couvre l'année donnée, sinon appel Nominatim.
- * Met à jour la ligne en base et renvoie le résultat.
+ * historique si elle couvre l'année donnée, sinon cascade Nominatim du
+ * niveau le plus précis au plus général (voir buildGeocodeLevels). Le
+ * premier niveau qui obtient un résultat l'emporte ; un échec (erreur
+ * réseau ou "non trouvé") sur un niveau ne fait pas échouer tout le
+ * lieu, il passe simplement au niveau suivant, moins précis — ce n'est
+ * qu'après épuisement de tous les niveaux que le lieu est marqué
+ * 'failed'. Met à jour la ligne en base (coordonnées, pays/région,
+ * `geocode_precision`) et renvoie le résultat.
  */
 export async function geocodePlace(place, { year, aliases = [] } = {}) {
   const alias = resolveHistoricalAlias(aliases, place.raw_label, year);
@@ -121,34 +188,41 @@ export async function geocodePlace(place, { year, aliases = [] } = {}) {
       region: alias.region,
       geocoded_at: new Date().toISOString(),
       geocode_status: 'ok',
+      geocode_precision: 'alias',
     };
     const { error } = await supabase.from('places').update(patch).eq('id', place.id);
     if (error) throw error;
     return { ...place, ...patch, source: 'alias' };
   }
 
-  try {
-    const result = await geocodeViaNominatim(place.raw_label);
-    if (!result) {
-      await supabase.from('places').update({ geocode_status: 'failed' }).eq('id', place.id);
-      return { ...place, geocode_status: 'failed', source: 'nominatim' };
+  const levels = buildGeocodeLevels(place);
+  for (let i = 0; i < levels.length; i++) {
+    try {
+      const result = await geocodeViaNominatim(levels[i].query);
+      if (result) {
+        const patch = {
+          latitude: result.latitude,
+          longitude: result.longitude,
+          country: result.country,
+          region: result.region,
+          geocoded_at: new Date().toISOString(),
+          geocode_status: 'ok',
+          geocode_precision: levels[i].precision,
+        };
+        const { error } = await supabase.from('places').update(patch).eq('id', place.id);
+        if (error) throw error;
+        return { ...place, ...patch, source: 'nominatim' };
+      }
+    } catch (err) {
+      console.error(`Géocodage de "${levels[i].query}" impossible :`, err);
     }
-    const patch = {
-      latitude: result.latitude,
-      longitude: result.longitude,
-      country: result.country,
-      region: result.region,
-      geocoded_at: new Date().toISOString(),
-      geocode_status: 'ok',
-    };
-    const { error } = await supabase.from('places').update(patch).eq('id', place.id);
-    if (error) throw error;
-    return { ...place, ...patch, source: 'nominatim' };
-  } catch (err) {
-    console.error(`Géocodage de "${place.raw_label}" impossible :`, err);
-    await supabase.from('places').update({ geocode_status: 'failed' }).eq('id', place.id);
-    return { ...place, geocode_status: 'failed', error: err.message };
+    // Repli vers un niveau plus général : une nouvelle requête Nominatim,
+    // donc on respecte le même espacement qu'entre deux lieux différents.
+    if (i < levels.length - 1) await sleep(1100);
   }
+
+  await supabase.from('places').update({ geocode_status: 'failed' }).eq('id', place.id);
+  return { ...place, geocode_status: 'failed', source: 'nominatim' };
 }
 
 /** Enregistre des coordonnées saisies à la main (panneau "Lieux à résoudre"). */

@@ -15,7 +15,7 @@ import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
 import TimeRangeSlider from './TimeRangeSlider.jsx';
 import PlacesResolverPanel from './PlacesResolverPanel.jsx';
 import IndividualPicker from '../individual/IndividualPicker.jsx';
-import { geocodeAllPendingPlaces } from '../../lib/geo/geocoder.js';
+import { geocodeAllPendingPlaces, GEOCODE_PRECISION_LABELS, isApproximateGeocodePrecision } from '../../lib/geo/geocoder.js';
 import { pushErrorToast } from '../../store/useToastStore.js';
 
 const DEFAULT_CENTER = [46.6, 2.5]; // France — utilisé seulement avant le premier chargement de données
@@ -24,11 +24,18 @@ const DEFAULT_ZOOM = 5;
 // La couleur de fond identifie la catégorie d'événement (naissance,
 // décès...) ; la bordure reprend la couleur de l'indice de preuve — un
 // marqueur donne donc les deux informations d'un coup d'œil, sans
-// attendre l'ouverture de l'infobulle.
-function markerIcon(color, icon, borderColor) {
+// attendre l'ouverture de l'infobulle. Un pin "approximatif" (lieu
+// résolu au département/région/pays seulement, voir
+// isApproximateGeocodePrecision) est en plus cerclé en pointillés et
+// légèrement transparent : contrairement à une commune, qui reste une
+// précision tout à fait normale pour un acte généalogique, ce niveau
+// peut être très loin du lieu réel.
+function markerIcon(color, icon, borderColor, approximate) {
+  const borderStyle = approximate ? 'dashed' : 'solid';
+  const opacity = approximate ? 0.65 : 1;
   return L.divIcon({
     className: 'arbre-map-marker',
-    html: `<div style="background:${color};width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:3px solid ${borderColor};font-size:13px;line-height:1;">${icon}</div>`,
+    html: `<div style="background:${color};width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:3px ${borderStyle} ${borderColor};opacity:${opacity};font-size:13px;line-height:1;">${icon}</div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
     popupAnchor: [0, -13],
@@ -214,8 +221,9 @@ export default function WorldMapView() {
                 {filteredEvents.map((e) => {
                   const cat = categoryOf(e.eventType);
                   const def = MAP_CATEGORIES[cat];
+                  const approximate = isApproximateGeocodePrecision(e.geocodePrecision);
                   return (
-                    <Marker key={e.id} position={[e.latitude, e.longitude]} icon={markerIcon(def.color, def.icon, proofLevelHex(e.proofLevel))}>
+                    <Marker key={e.id} position={[e.latitude, e.longitude]} icon={markerIcon(def.color, def.icon, proofLevelHex(e.proofLevel), approximate)}>
                       <Popup>
                         <div className="min-w-[180px] text-xs">
                           <div className="mb-1 font-semibold">{e.label || EVENT_TYPE_LABELS[e.eventType] || e.eventType}</div>
@@ -224,11 +232,18 @@ export default function WorldMapView() {
                           <ul className="mt-1 space-y-0.5">
                             {e.people.map((p) => <li key={p.id}>{p.name}</li>)}
                           </ul>
-                          {e.proofLevel && (
-                            <span className={`mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] ${proofLevelBadgeClass(e.proofLevel)}`}>
-                              {PROOF_LEVEL_LABELS[e.proofLevel]}
-                            </span>
-                          )}
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {e.proofLevel && (
+                              <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] ${proofLevelBadgeClass(e.proofLevel)}`}>
+                                {PROOF_LEVEL_LABELS[e.proofLevel]}
+                              </span>
+                            )}
+                            {e.geocodePrecision && (
+                              <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] ${approximate ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'}`}>
+                                {approximate ? '≈ ' : ''}{GEOCODE_PRECISION_LABELS[e.geocodePrecision] || e.geocodePrecision}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </Popup>
                     </Marker>
@@ -251,6 +266,9 @@ export default function WorldMapView() {
           {!loading && (
             <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] rounded-lg bg-white/90 px-2.5 py-2 text-[10px] shadow dark:bg-neutral-900/90">
               <div className="mb-1 font-medium text-neutral-500 dark:text-neutral-400">Couleur = type · bordure = fiabilité</div>
+              {filteredEvents.some((e) => isApproximateGeocodePrecision(e.geocodePrecision)) && (
+                <div className="mb-1 text-neutral-400">Pin pointillé/translucide = position approximative (département, région ou pays seulement)</div>
+              )}
               <div className="flex gap-2">
                 {Object.entries(MAP_CATEGORIES).map(([key, def]) => (
                   <span key={key} className="flex items-center gap-1">
