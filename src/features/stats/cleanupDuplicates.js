@@ -6,6 +6,7 @@
  * Déclenché depuis Audit → bouton "Nettoyer les événements en double".
  */
 import { supabase } from '../../lib/supabaseClient.js';
+import { refreshAllProofLevels } from '../../lib/db/proofLevelSync.js';
 
 export async function cleanupTreeEventDuplicates(treeId) {
   // Lieux d'abord (supabase/dedupe_events_by_place_label.sql) : deux
@@ -29,7 +30,17 @@ export async function cleanupTreeEventDuplicates(treeId) {
   if (sourceErr) sourcesError = sourceErr.message || String(sourceErr);
   else sourcesRemoved = sourceCount ?? 0;
 
+  // Indices de preuve : relevés d'après les preuves réellement rattachées
+  // (acte scanné -> prouvé par acte original...), jamais abaissés.
+  let proofLevelsRaised = null;
+  try {
+    proofLevelsRaised = await refreshAllProofLevels(treeId);
+  } catch {
+    proofLevelsRaised = null;
+  }
+
   return {
+    proofLevelsRaised,
     unionsMerged: row?.unions_merged ?? 0,
     eventsRemoved: row?.events_removed ?? 0,
     sourcesRemoved,

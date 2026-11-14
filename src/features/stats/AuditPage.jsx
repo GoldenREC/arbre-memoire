@@ -178,6 +178,7 @@ export default function AuditPage() {
             {cleanup.result.sourcesRemoved === null
               ? `. Sources non traitées (${cleanup.result.sourcesError || 'erreur inconnue'}) : vérifie que supabase/dedupe_sources.sql est bien exécuté.`
               : `, ${cleanup.result.sourcesRemoved} source(s) en double supprimée(s).`}
+            {cleanup.result.proofLevelsRaised ? ` ${cleanup.result.proofLevelsRaised} indice(s) de preuve relevé(s).` : ''}
           </span>
         )}
         {cleanup.error && <span className="text-xs text-red-500">{cleanup.error}</span>}

@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { createSource } from '../sources/sourcesMutations.js';
 import { uploadMediaFile } from '../../lib/db/mediaStorage.js';
 import { addCitation, ensureEvent, updateEventProofLevel } from './individualMutations.js';
+import { refreshProofLevelsForEvents } from '../../lib/db/proofLevelSync.js';
 
 /** Actes (médias) déjà rattachés à un événement, via les citations qui le citent. */
 export async function listActsForEvent(eventId) {
@@ -51,12 +52,14 @@ export async function attachNewAct(treeId, { eventId, individualId = null, title
   const sourceId = await createSource(treeId, { title });
   const mediaId = await uploadMediaFile(treeId, file, { mediaType: 'document', sourceId, title: file.name, folder: 'actes' });
   await addCitation(treeId, { eventId, individualId, sourceId });
+  await refreshProofLevelsForEvents([eventId]);
   return { sourceId, mediaId };
 }
 
 /** Rattache une source déjà existante (créée depuis le gestionnaire de sources) à l'événement. */
 export async function attachExistingSource(treeId, { eventId, individualId = null, sourceId, transcription }) {
   await addCitation(treeId, { eventId, individualId, sourceId, transcription });
+  await refreshProofLevelsForEvents([eventId]);
 }
 
 /** Détache l'acte de l'événement (supprime la citation, conserve la source pour un usage ailleurs). */
@@ -135,6 +138,7 @@ export async function attachDateProof(treeId, { subjectKind = 'individual', subj
     if (proof.file) {
       await uploadMediaFile(treeId, proof.file, { mediaType: 'document', sourceId: existingSourceId, title: proof.file.name, folder: 'actes' });
     }
+    if (proof.file) await refreshProofLevelsForEvents([eventId]);
     return { eventId, sourceId: existingSourceId, reused: true };
   }
 

@@ -8,6 +8,7 @@ import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofL
 import { SOURCE_TYPES, isUnreliableSourceUrl } from '../../lib/utils/sourceReliability.js';
 import ActViewer from './ActViewer.jsx';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
+import { refreshProofLevelsForSource } from '../../lib/db/proofLevelSync.js';
 
 /**
  * Modale de détail d'une source : champs (titre, dépôt, cote, URL,
@@ -37,7 +38,11 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
   useEffect(() => {
     if (!sourceId) return;
     listMediaForSource(sourceId).then(setMedia);
-    listCitationsForSource(sourceId).then(setCitations);
+    // Rattrapage à l'ouverture : relève l'indice de preuve des événements
+    // cités si la source le justifie (cas des preuves ajoutées avant cette règle).
+    (canEdit ? refreshProofLevelsForSource(sourceId).catch(() => 0) : Promise.resolve(0))
+      .then(() => listCitationsForSource(sourceId))
+      .then(setCitations);
   }, [sourceId]);
 
   async function handleSave(e) {
@@ -50,6 +55,10 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
         setSourceId(id);
       } else {
         await updateSource(sourceId, form);
+        // Le type ou le lien ont pu changer : l'indice de preuve des
+        // événements qui citent cette source est relevé en conséquence.
+        await refreshProofLevelsForSource(sourceId);
+        setCitations(await listCitationsForSource(sourceId));
       }
       onSaved?.();
     } finally {
@@ -85,6 +94,9 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
     try {
       await uploadMediaFile(treeId, file, { mediaType: 'document', sourceId, title: file.name });
       setMedia(await listMediaForSource(sourceId));
+      // Un scan vient d'être joint : un acte devient "prouvé par acte original".
+      await refreshProofLevelsForSource(sourceId);
+      setCitations(await listCitationsForSource(sourceId));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
