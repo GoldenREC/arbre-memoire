@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { yearOptions, daysInMonth, partsToIsoDate, isoDateToParts, MONTH_LABELS } from '../../lib/utils/dateParts.js';
 
 /**
@@ -9,9 +10,33 @@ import { yearOptions, daysInMonth, partsToIsoDate, isoDateToParts, MONTH_LABELS 
  * Contrôlé comme un champ classique : `value` est une date ISO
  * ('YYYY-MM-DD') ou vide/null, `onChange` reçoit la nouvelle date ISO
  * ou null tant qu'elle est incomplète.
+ *
+ * `onChange` ne renvoie une date ISO que lorsque les 3 champs sont
+ * complets : tant que l'utilisateur n'a choisi que le jour (ou le
+ * jour et le mois), `value` reste null. Le composant garde donc un
+ * état local (`parts`) pour ces sélections partielles au lieu de les
+ * recalculer depuis `value` à chaque rendu — sinon chaque sélection
+ * intermédiaire serait effacée au rendu suivant puisque `value` n'a
+ * pas encore changé. Une ref mémorise la dernière valeur ISO émise
+ * par le composant lui-même, pour ne resynchroniser l'état local
+ * depuis `value` que lors d'un changement venu de l'extérieur (reset
+ * du formulaire, changement de fiche) — jamais après notre propre
+ * onChange, y compris quand celui-ci efface un jour devenu invalide
+ * après un changement de mois/année (ce qui renvoie aussi null).
  */
 export default function DatePartsInput({ value, onChange, disabled = false }) {
-  const parts = isoDateToParts(value);
+  const [parts, setParts] = useState(() => isoDateToParts(value));
+  const lastEmittedRef = useRef(value ?? null);
+
+  useEffect(() => {
+    const incoming = value ?? null;
+    if (incoming !== lastEmittedRef.current) {
+      lastEmittedRef.current = incoming;
+      setParts(isoDateToParts(incoming));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
   const years = yearOptions();
   const maxDay = daysInMonth(Number(parts.year) || null, Number(parts.month) || null);
 
@@ -22,7 +47,10 @@ export default function DatePartsInput({ value, onChange, disabled = false }) {
     // (ex: 31 choisi, puis mois passé à novembre) est réinitialisé
     // plutôt que laissé sur une valeur désormais invalide.
     if (next.day && Number(next.day) > max) next.day = '';
-    onChange(partsToIsoDate(next));
+    setParts(next);
+    const iso = partsToIsoDate(next);
+    lastEmittedRef.current = iso;
+    onChange(iso);
   }
 
   return (

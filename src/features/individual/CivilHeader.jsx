@@ -156,28 +156,32 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
             <input type="checkbox" checked={form.isDeceased} onChange={(e) => setForm((f) => ({ ...f, isDeceased: e.target.checked }))} />
           </Field>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <BlockField label="Date de décès">
-              <DatePartsInput value={form.deathDate} onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))} disabled={loadingPlaces} />
-            </BlockField>
-            <Field label="Précision (décès)">
-              <select className="field" value={form.deathDatePrecision} onChange={set(setForm, 'deathDatePrecision')}>
-                {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Field>
-          </div>
-          <BlockField label="Lieu de décès">
-            {deathPlaceLegacy && (
-              <p className="mb-1.5 text-[11px] text-neutral-400">
-                Lieu actuel (non détaillé) : {form.deathPlaceLegacyLabel} — laissez les champs vides pour le conserver tel quel, ou renseignez-les pour le remplacer par une version détaillée.
-              </p>
-            )}
-            {loadingPlaces ? (
-              <p className="text-xs text-neutral-400">Chargement…</p>
-            ) : (
-              <StructuredPlaceInput value={form.deathPlace} onChange={(v) => setForm((f) => ({ ...f, deathPlace: v, deathPlaceTouched: true }))} />
-            )}
-          </BlockField>
+          {form.isDeceased && (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <BlockField label="Date de décès">
+                  <DatePartsInput value={form.deathDate} onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))} disabled={loadingPlaces} />
+                </BlockField>
+                <Field label="Précision (décès)">
+                  <select className="field" value={form.deathDatePrecision} onChange={set(setForm, 'deathDatePrecision')}>
+                    {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <BlockField label="Lieu de décès">
+                {deathPlaceLegacy && (
+                  <p className="mb-1.5 text-[11px] text-neutral-400">
+                    Lieu actuel (non détaillé) : {form.deathPlaceLegacyLabel} — laissez les champs vides pour le conserver tel quel, ou renseignez-les pour le remplacer par une version détaillée.
+                  </p>
+                )}
+                {loadingPlaces ? (
+                  <p className="text-xs text-neutral-400">Chargement…</p>
+                ) : (
+                  <StructuredPlaceInput value={form.deathPlace} onChange={(v) => setForm((f) => ({ ...f, deathPlace: v, deathPlaceTouched: true }))} />
+                )}
+              </BlockField>
+            </>
+          )}
         </div>
 
         <div className="mt-4 flex gap-2">
