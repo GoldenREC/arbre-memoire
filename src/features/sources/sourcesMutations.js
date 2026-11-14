@@ -7,7 +7,24 @@ export async function listSources(treeId) {
     .eq('tree_id', treeId)
     .order('title');
   if (error) throw error;
-  return data || [];
+
+  // Types d'événements prouvés par chaque source (via ses citations), pour
+  // les filtres du gestionnaire de sources (voir sourceFilters.js).
+  const [{ data: citations, error: citErr }, { data: events, error: evErr }] = await Promise.all([
+    supabase.from('citations').select('source_id, event_id').eq('tree_id', treeId),
+    supabase.from('events').select('id, event_type').eq('tree_id', treeId),
+  ]);
+  if (citErr) throw citErr;
+  if (evErr) throw evErr;
+  const typeByEvent = new Map((events || []).map((e) => [e.id, e.event_type]));
+  const typesBySource = new Map();
+  for (const c of citations || []) {
+    const type = typeByEvent.get(c.event_id);
+    if (!type) continue;
+    if (!typesBySource.has(c.source_id)) typesBySource.set(c.source_id, new Set());
+    typesBySource.get(c.source_id).add(type);
+  }
+  return (data || []).map((s) => ({ ...s, eventTypes: [...(typesBySource.get(s.id) || [])] }));
 }
 
 export async function createSource(treeId, patch) {
