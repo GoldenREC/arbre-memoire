@@ -15,6 +15,8 @@ import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
 import TimeRangeSlider from './TimeRangeSlider.jsx';
 import PlacesResolverPanel from './PlacesResolverPanel.jsx';
 import IndividualPicker from '../individual/IndividualPicker.jsx';
+import { geocodeAllPendingPlaces } from '../../lib/geo/geocoder.js';
+import { pushErrorToast } from '../../store/useToastStore.js';
 
 const DEFAULT_CENTER = [46.6, 2.5]; // France — utilisé seulement avant le premier chargement de données
 const DEFAULT_ZOOM = 5;
@@ -68,6 +70,8 @@ export default function WorldMapView() {
   const [yearRange, setYearRange] = useState(null);
   const [pathPeople, setPathPeople] = useState([]); // [{id, name}]
   const [showResolver, setShowResolver] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveProgress, setResolveProgress] = useState(null); // { index, total }
   const [searchParams] = useSearchParams();
 
   // Permet de pré-sélectionner un parcours de vie depuis l'extérieur
@@ -99,6 +103,33 @@ export default function WorldMapView() {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTreeId]);
+
+  /**
+   * Après un import GEDCOM, les lieux sont créés sans coordonnées
+   * (geocode_status "pending") : rien n'apparaît sur la carte tant
+   * qu'ils n'ont pas été résolus. Plutôt que de laisser une carte vide
+   * sans explication, ce bouton lance la résolution en masse
+   * directement depuis la carte (même logique que le panneau "Lieux à
+   * résoudre"), avec un retour de progression — Nominatim est limité à
+   * ~1 requête/seconde, la résolution de beaucoup de lieux prend donc
+   * plusieurs minutes.
+   */
+  async function handleResolveAll() {
+    setResolving(true);
+    setResolveProgress({ index: 0, total: unresolvedCount });
+    try {
+      await geocodeAllPendingPlaces(currentTreeId, {
+        includeFailedRetries: true,
+        onProgress: (p) => setResolveProgress(p),
+      });
+      await reload();
+    } catch (err) {
+      pushErrorToast(err.message);
+    } finally {
+      setResolving(false);
+      setResolveProgress(null);
+    }
+  }
 
   const yearBounds = useMemo(() => {
     const years = events.map((e) => e.year).filter(Boolean);
@@ -227,6 +258,41 @@ export default function WorldMapView() {
                     {def.label}
                   </span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {!loading && events.length === 0 && unresolvedCount > 0 && (
+            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/80 p-6 text-center dark:bg-neutral-950/80">
+              <div className="max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
+                <p className="mb-1 text-sm font-medium">La carte est vide pour l'instant</p>
+                <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">
+                  {unresolvedCount} lieu{unresolvedCount > 1 ? 'x' : ''} {unresolvedCount > 1 ? 'ne sont' : "n'est"} pas encore géolocalisé{unresolvedCount > 1 ? 's' : ''}
+                  {' '}— c'est normal juste après un import GEDCOM. Aucun marqueur ne peut s'afficher tant que les lieux n'ont pas de coordonnées.
+                </p>
+                {canEdit ? (
+                  resolving ? (
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Résolution en cours… {resolveProgress ? `${resolveProgress.index}/${resolveProgress.total}` : ''}
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+                        <div
+                          className="h-full bg-accent-600 transition-all"
+                          style={{ width: resolveProgress ? `${(resolveProgress.index / Math.max(1, resolveProgress.total)) * 100}%` : '0%' }}
+                        />
+                      </div>
+                      <p className="mt-2 text-[11px] text-neutral-400">Peut prendre plusieurs minutes (1 lieu/seconde environ).</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleResolveAll}
+                      className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700"
+                    >
+                      Localiser les {unresolvedCount} lieu{unresolvedCount > 1 ? 'x' : ''} maintenant
+                    </button>
+                  )
+                ) : (
+                  <p className="text-xs text-neutral-400">Demande à un membre admin ou famille de résoudre les lieux.</p>
+                )}
               </div>
             </div>
           )}
