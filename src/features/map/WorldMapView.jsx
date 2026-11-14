@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
@@ -14,6 +14,7 @@ import { PROOF_LEVEL_LABELS, proofLevelBadgeClass, proofLevelHex } from '../../l
 import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
 import TimeRangeSlider from './TimeRangeSlider.jsx';
 import PlacesResolverPanel from './PlacesResolverPanel.jsx';
+import EventQuickEditPanel from './EventQuickEditPanel.jsx';
 import IndividualPicker from '../individual/IndividualPicker.jsx';
 import { geocodeAllPendingPlaces, GEOCODE_PRECISION_LABELS, isApproximateGeocodePrecision } from '../../lib/geo/geocoder.js';
 import { pushErrorToast } from '../../store/useToastStore.js';
@@ -86,6 +87,7 @@ export default function WorldMapView() {
   const [yearRange, setYearRange] = useState(null);
   const [pathPeople, setPathPeople] = useState([]); // [{id, name}]
   const [showResolver, setShowResolver] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [resolving, setResolving] = useState(false);
   const [resolveProgress, setResolveProgress] = useState(null); // { index, total }
   const [searchParams] = useSearchParams();
@@ -101,9 +103,10 @@ export default function WorldMapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  async function reload() {
+  // `silent` : recharge les données sans démonter la carte (zoom et position conservés).
+  async function reload({ silent = false } = {}) {
     if (!currentTreeId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const [ev, pl] = await Promise.all([
       fetchMapEvents(currentTreeId, role, privacyThresholdYears),
       fetchPlacesWithStatus(currentTreeId),
@@ -169,6 +172,7 @@ export default function WorldMapView() {
   );
 
   const [focusTarget, setFocusTarget] = useState(null);
+  const editingEvent = editingEventId ? events.find((e) => e.id === editingEventId) || null : null;
   const eventCountByPlaceId = useMemo(() => {
     const counts = new Map();
     for (const e of events) if (e.placeId) counts.set(e.placeId, (counts.get(e.placeId) || 0) + 1);
@@ -247,7 +251,7 @@ export default function WorldMapView() {
                           <div className="text-neutral-500">{e.placeLabel}</div>
                           {e.date && <div className="text-neutral-500">{e.date}</div>}
                           <ul className="mt-1 space-y-0.5">
-                            {e.people.map((p) => <li key={p.id}>{p.name}</li>)}
+                            {e.people.map((p) => <li key={p.id}><Link to={`/individus/${p.id}`} title="Ouvrir la fiche">{p.name}</Link></li>)}
                           </ul>
                           <div className="mt-1 flex flex-wrap gap-1">
                             {e.proofLevel && (
@@ -261,6 +265,14 @@ export default function WorldMapView() {
                               </span>
                             )}
                           </div>
+                          {canEdit && (
+                            <button
+                              onClick={() => setEditingEventId(e.id)}
+                              className="mt-2 rounded bg-accent-600 px-2 py-1 text-[11px] font-medium text-white"
+                            >
+                              ✎ Modifier la date et le lieu
+                            </button>
+                          )}
                         </div>
                       </Popup>
                     </Marker>
@@ -278,6 +290,15 @@ export default function WorldMapView() {
                 ) : null
               )}
             </MapContainer>
+          )}
+
+          {editingEvent && (
+            <EventQuickEditPanel
+              treeId={currentTreeId}
+              event={editingEvent}
+              onClose={() => setEditingEventId(null)}
+              onSaved={async () => { await reload({ silent: true }); setEditingEventId(null); }}
+            />
           )}
 
           {!loading && (

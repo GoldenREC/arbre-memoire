@@ -11,6 +11,7 @@
  * s'affiche partout (fiche, arbre, carte).
  */
 import { supabase } from '../../lib/supabaseClient.js';
+import { recordPatchForEvent } from '../map/eventQuickEdit.js';
 
 const PROOF_RANK = { proven_original: 1, proven_secondary: 2, probable: 3, hypothesis: 4, disproved: 5 };
 
@@ -139,26 +140,9 @@ export async function keepEventVersion(keptEvent, otherEventIds, { syncRecord = 
   }
 
   if (!syncRecord) return;
-  const date = keepEvent.date || null;
-  const precision = keepEvent.datePrecision || 'unknown';
-  const placeId = keepEvent.placeId || null;
-  let table = null;
-  let patch = null;
-  if (keepEvent.subjectKind === 'individual' && keepEvent.eventType === 'birth') {
-    table = 'individuals';
-    patch = { birth_date: date, birth_date_precision: precision, birth_place_id: placeId };
-  } else if (keepEvent.subjectKind === 'individual' && keepEvent.eventType === 'death') {
-    table = 'individuals';
-    patch = { death_date: date, death_date_precision: precision, death_place_id: placeId };
-  } else if (keepEvent.subjectKind === 'union' && keepEvent.eventType === 'union_start') {
-    table = 'unions';
-    patch = { start_date: date, start_date_precision: precision, place_id: placeId };
-  } else if (keepEvent.subjectKind === 'union' && keepEvent.eventType === 'divorce') {
-    table = 'unions';
-    patch = { end_date: date, end_date_precision: precision };
-  }
-  if (table) {
-    const { error } = await supabase.from(table).update(patch).eq('id', keepEvent.subjectId);
+  const record = recordPatchForEvent(keepEvent, keepEvent);
+  if (record) {
+    const { error } = await supabase.from(record.table).update(record.patch).eq('id', keepEvent.subjectId);
     if (error) throw error;
   }
 }
