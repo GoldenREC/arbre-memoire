@@ -82,6 +82,7 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
         setStaleArmed(false);
       }
     }
+    const staleLabel = versions[0]?.event.eventType === 'divorce' ? 'divorce' : 'mariage';
     async function handleKeepEvent() {
       setBusyId('align');
       try {
@@ -117,14 +118,14 @@ export default function AuditResolver({ finding, bundle, canEdit, onChanged }) {
               disabled={busyId !== null}
               className="rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
             >
-              {busyId === 'stale' ? 'Suppression…' : staleArmed ? 'Confirmer : supprimer cet événement' : `Garder le statut actuel et supprimer ce {versions[0]?.event.eventType === 'divorce' ? 'divorce' : 'mariage'}`}
+              {busyId === 'stale' ? 'Suppression…' : staleArmed ? 'Confirmer : supprimer cet événement' : `Garder le statut actuel et supprimer ce ${staleLabel}`}
             </button>
             <button
               onClick={handleKeepEvent}
               disabled={busyId !== null}
               className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800"
             >
-              {busyId === 'align' ? 'Enregistrement…' : `Garder ce {versions[0]?.event.eventType === 'divorce' ? 'divorce' : 'mariage'} et passer l'union en « ${versions[0]?.event.eventType === 'divorce' ? 'divorcée' : 'mariée'} »`}
+              {busyId === 'align' ? 'Enregistrement…' : `Garder ce ${staleLabel} et passer l'union en « ${versions[0]?.event.eventType === 'divorce' ? 'divorcée' : 'mariée'} »`}
             </button>
           </div>
         )}
