@@ -80,10 +80,42 @@ export async function findOrCreateStructuredPlace(treeId, place) {
   return created.id;
 }
 
-/** Met à jour l'état civil (en-tête de la fiche). placesRaw : { birth, death }. */
-export async function updateIndividualCivilInfo(individualId, treeId, patch, placesRaw = {}) {
-  const birthPlaceId = placesRaw.birth !== undefined ? await findOrCreatePlace(treeId, placesRaw.birth) : undefined;
-  const deathPlaceId = placesRaw.death !== undefined ? await findOrCreatePlace(treeId, placesRaw.death) : undefined;
+/**
+ * Lieu structuré complet (les 9 champs) pour un id de lieu — sert à
+ * pré-remplir StructuredPlaceInput quand on édite l'état civil d'une
+ * fiche existante (CivilHeader) : la Map `places` fournie aux autres
+ * composants (Timeline, etc.) ne porte que raw_label, qui suffit pour
+ * l'affichage mais pas pour éditer le lieu champ par champ. Renvoie un
+ * objet compatible EMPTY_PLACE (chaînes vides pour les champs non
+ * renseignés — cas d'un lieu importé d'un GEDCOM ou créé via l'ancien
+ * champ libre, qui n'a que raw_label), ou null si aucun lieu.
+ */
+export async function fetchStructuredPlace(placeId) {
+  if (!placeId) return null;
+  const { data, error } = await supabase
+    .from('places')
+    .select('street_number, street_name, building_name, arrondissement, city, postal_code, department, region, country')
+    .eq('id', placeId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    streetNumber: data.street_number || '',
+    streetName: data.street_name || '',
+    buildingName: data.building_name || '',
+    arrondissement: data.arrondissement || '',
+    city: data.city || '',
+    postalCode: data.postal_code || '',
+    department: data.department || '',
+    region: data.region || '',
+    country: data.country || '',
+  };
+}
+
+/** Met à jour l'état civil (en-tête de la fiche). places : { birth, death } — objets lieu structurés (voir StructuredPlaceInput.jsx), absent pour ne pas toucher au lieu actuel. */
+export async function updateIndividualCivilInfo(individualId, treeId, patch, places = {}) {
+  const birthPlaceId = places.birth !== undefined ? await findOrCreateStructuredPlace(treeId, places.birth) : undefined;
+  const deathPlaceId = places.death !== undefined ? await findOrCreateStructuredPlace(treeId, places.death) : undefined;
 
   const row = {
     first_names: patch.firstNames ?? null,

@@ -32,9 +32,20 @@ function makeSupabaseMock(initial = {}) {
         tables[table] = tables[table].concat(arr.map((r, i) => ({ id: `${table}-new-${tables[table].length + i}`, ...r })));
         return this;
       },
+      update(patch) {
+        this._update = patch;
+        return this;
+      },
       then(resolve) {
         if (this._insertedRows) {
           resolve({ data: this._single ? this._insertedRows[0] : this._insertedRows, error: null });
+          return;
+        }
+        if (this._update) {
+          const idFilter = this._filters.find(([c]) => c === 'id');
+          const idx = tables[table].findIndex((r) => r.id === idFilter?.[1]);
+          if (idx >= 0) tables[table][idx] = { ...tables[table][idx], ...this._update };
+          resolve({ data: null, error: null });
           return;
         }
         let rows = tables[table] || [];
@@ -133,5 +144,55 @@ describe('linkAsSibling', () => {
     const count = await linkAsSibling('tree-1', 'new-person', 'existing-person');
     expect(count).toBe(0);
     expect(mock.upserted.filiations).toBeUndefined();
+  });
+});
+
+describe('fetchStructuredPlace', () => {
+  it('renvoie null sans id', async () => {
+    const { fetchStructuredPlace } = await import('./individualMutations.js');
+    expect(await fetchStructuredPlace(null)).toBeNull();
+    expect(await fetchStructuredPlace(undefined)).toBeNull();
+  });
+
+  it('renvoie null quand le lieu n\'existe pas', async () => {
+    const { fetchStructuredPlace } = await import('./individualMutations.js');
+    expect(await fetchStructuredPlace('place-missing')).toBeNull();
+  });
+
+  it('mappe les colonnes en camelCase, avec des chaînes vides pour les champs non renseignés', async () => {
+    mock = makeSupabaseMock({
+      places: [{ id: 'place-1', city: 'Cagnes-sur-Mer', department: 'Alpes-Maritimes', region: null, country: 'France' }],
+    });
+    const { fetchStructuredPlace } = await import('./individualMutations.js');
+    const place = await fetchStructuredPlace('place-1');
+    expect(place).toEqual({
+      streetNumber: '', streetName: '', buildingName: '', arrondissement: '',
+      city: 'Cagnes-sur-Mer', postalCode: '', department: 'Alpes-Maritimes', region: '', country: 'France',
+    });
+  });
+});
+
+describe('updateIndividualCivilInfo — lieux', () => {
+  it('ne touche pas au lieu existant quand la clé places.birth est absente', async () => {
+    mock = makeSupabaseMock({ individuals: [{ id: 'ind-1', birth_place_id: 'place-original' }] });
+    const { updateIndividualCivilInfo } = await import('./individualMutations.js');
+    await updateIndividualCivilInfo('ind-1', 'tree-1', {}, {});
+    expect(mock.tables.individuals[0].birth_place_id).toBe('place-original');
+  });
+
+  it('efface explicitement le lieu quand places.birth est un objet structuré vide', async () => {
+    mock = makeSupabaseMock({ individuals: [{ id: 'ind-1', birth_place_id: 'place-original' }] });
+    const { updateIndividualCivilInfo } = await import('./individualMutations.js');
+    await updateIndividualCivilInfo('ind-1', 'tree-1', {}, { birth: {} });
+    expect(mock.tables.individuals[0].birth_place_id).toBeNull();
+  });
+
+  it('crée/retrouve le lieu structuré et l\'associe quand places.birth est renseigné', async () => {
+    mock = makeSupabaseMock({ individuals: [{ id: 'ind-1' }] });
+    const { updateIndividualCivilInfo } = await import('./individualMutations.js');
+    await updateIndividualCivilInfo('ind-1', 'tree-1', {}, { birth: { city: 'Cagnes-sur-Mer', country: 'France' } });
+    const newPlaceId = mock.tables.individuals[0].birth_place_id;
+    expect(newPlaceId).toMatch(/^places-new-/);
+    expect(mock.inserted.places[0].city).toBe('Cagnes-sur-Mer');
   });
 });
