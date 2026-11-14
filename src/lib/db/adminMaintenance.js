@@ -82,3 +82,32 @@ export async function fetchRecordHistory(treeId, { tableName = null, recordId = 
 export async function fetchRecordHistoryFor(treeId, tableName, recordId) {
   return fetchRecordHistory(treeId, { tableName, recordId, limit: 200 });
 }
+
+/**
+ * Supprime DÉFINITIVEMENT un arbre et tout son contenu : fiches, unions,
+ * filiations, sources, médias, journal d'activité… La cascade SQL
+ * (`tree_id references trees(id) on delete cascade`, voir schema.sql)
+ * se charge de toutes les tables liées en une seule suppression. Vide
+ * aussi le dossier Storage de l'arbre, qui n'est pas couvert par cette
+ * cascade (fichiers binaires, hors base).
+ *
+ * Réservé au propriétaire de l'arbre — policy RLS "trees: owner peut
+ * tout faire" (`owner_id = auth.uid()`) : un appel par quelqu'un d'autre
+ * échoue côté base. La confirmation explicite doit être faite côté UI
+ * avant d'appeler cette fonction, qui n'a aucun filet de sécurité propre.
+ */
+export async function deleteTree(treeId) {
+  try {
+    for (const sub of MEDIA_SUBFOLDERS) {
+      const { data: files } = await supabase.storage.from(BUCKET).list(`${treeId}/${sub}`, { limit: 1000 });
+      const paths = (files || []).filter((f) => f.id !== null).map((f) => `${treeId}/${sub}/${f.name}`);
+      if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
+    }
+  } catch {
+    // Le nettoyage du stockage est secondaire : une erreur ici ne doit pas
+    // empêcher la suppression des données (l'essentiel, en base).
+  }
+
+  const { error } = await supabase.from('trees').delete().eq('id', treeId);
+  if (error) throw error;
+}

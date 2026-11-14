@@ -123,7 +123,12 @@
       "scan": "Scan",
       "noOrphans": "No orphaned files found.",
       "auditLogTitle": "Activity log",
-      "auditLogHelp": "Who changed what, and when — across every record, administrators included."
+      "auditLogHelp": "Who changed what, and when — across every record, administrators included.",
+      "dangerZoneTitle": "Danger zone",
+      "deleteTreeHelp": "Permanently deletes all of this tree's content (records, unions, filiations, sources, media, activity log…) so you can start over with a clean import. Irreversible, and restricted to the tree's owner.",
+      "deleteTreeButton": "Delete the tree",
+      "deleteTreeConfirmPrompt": "To confirm, type the following phrase exactly (in French):",
+      "deleteTreeConfirmSubmit": "Permanently delete"
     }
   }
 }

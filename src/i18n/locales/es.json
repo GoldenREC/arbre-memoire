@@ -123,7 +123,12 @@
       "scan": "Analizar",
       "noOrphans": "No se encontraron archivos huérfanos.",
       "auditLogTitle": "Registro de actividad",
-      "auditLogHelp": "Quién cambió qué, y cuándo — en todas las fichas, administradores incluidos."
+      "auditLogHelp": "Quién cambió qué, y cuándo — en todas las fichas, administradores incluidos.",
+      "dangerZoneTitle": "Zona de peligro",
+      "deleteTreeHelp": "Elimina definitivamente todo el contenido de este árbol (fichas, uniones, filiaciones, fuentes, medios, registro de actividad…) para empezar de nuevo con una importación limpia. Irreversible y reservado al propietario del árbol.",
+      "deleteTreeButton": "Eliminar el árbol",
+      "deleteTreeConfirmPrompt": "Para confirmar, escribe exactamente la siguiente frase (en francés):",
+      "deleteTreeConfirmSubmit": "Eliminar definitivamente"
     }
   }
 }

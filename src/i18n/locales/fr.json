@@ -123,7 +123,12 @@
       "scan": "Analyser",
       "noOrphans": "Aucun fichier orphelin trouvé.",
       "auditLogTitle": "Journal d'activité",
-      "auditLogHelp": "Qui a modifié quoi, et quand — toutes fiches confondues, administrateurs compris."
+      "auditLogHelp": "Qui a modifié quoi, et quand — toutes fiches confondues, administrateurs compris.",
+      "dangerZoneTitle": "Zone de danger",
+      "deleteTreeHelp": "Supprime définitivement tout le contenu de cet arbre (fiches, unions, filiations, sources, médias, journal d'activité…) pour repartir de zéro avec un import propre. Irréversible et réservé au propriétaire de l'arbre.",
+      "deleteTreeButton": "Supprimer l'arbre",
+      "deleteTreeConfirmPrompt": "Pour confirmer, écris exactement la phrase suivante :",
+      "deleteTreeConfirmSubmit": "Supprimer définitivement"
     }
   }
 }
