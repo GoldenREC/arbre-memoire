@@ -10,16 +10,22 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { saveStagingModel } from '../../lib/db/localDb.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import MergeReview from './MergeReview.jsx';
+import { extractJson, collectImagePaths, matchImages } from '../../lib/customImport/pastedAct.js';
 
 /** Individus déjà présents dans l'arbre, pour le rapprochement de doublons (étape de revue). */
 async function fetchExistingForDedupe(treeId) {
   const { data, error } = await supabase
     .from('individuals')
-    .select('id, first_names, last_name, sex, birth_date')
+    .select('id, first_names, last_name, birth_name, sex, birth_date, birth_date_precision, death_date, death_date_precision, is_deceased, occupation, biography')
     .eq('tree_id', treeId);
   if (error) throw error;
+  // Tous les champs comparables : la revue affiche les vraies différences
+  // entre la fiche existante et le fichier (voir MergeReview.jsx).
   return (data || []).map((r) => ({
-    id: r.id, firstNames: r.first_names, lastName: r.last_name, sex: r.sex, birthDate: r.birth_date,
+    id: r.id, firstNames: r.first_names, lastName: r.last_name, birthName: r.birth_name, sex: r.sex,
+    birthDate: r.birth_date, birthDatePrecision: r.birth_date_precision,
+    deathDate: r.death_date, deathDatePrecision: r.death_date_precision,
+    isDeceased: r.is_deceased, occupation: r.occupation, biography: r.biography,
   }));
 }
 
@@ -53,6 +59,9 @@ export default function ImportWizard() {
   const [stagingModel, setStagingModel] = useState(null);
   const [imagesByPath, setImagesByPath] = useState(null);
   const [candidates, setCandidates] = useState([]);
+  const [existingIndividuals, setExistingIndividuals] = useState([]);
+  const [pastedJson, setPastedJson] = useState('');
+  const [scanFiles, setScanFiles] = useState([]);
   const [importBatchId, setImportBatchId] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const navigate = useNavigate();
@@ -73,12 +82,39 @@ export default function ImportWizard() {
     setStagingModel(model);
     setImagesByPath(null);
     setCandidates(found);
+    setExistingIndividuals(existingMapped);
     setImportBatchId(batchId);
     setStep('review');
   }
 
   async function handleCustomFile(file) {
     const { model: rawModel, imagesByPath: images } = await parseCustomImportFile(file);
+    await reviewCustomModel(rawModel, images, file.name);
+  }
+
+  // Acte collé en texte (JSON produit par une IA — voir docs/PROMPT_ACTE.md)
+  // + scans choisis à la main : même suite que pour un .zip.
+  async function handlePastedAct() {
+    setStep('parsing');
+    setErrorMsg(null);
+    try {
+      const rawModel = extractJson(pastedJson);
+      const { imagesByPath: images, missing } = matchImages([...collectImagePaths(rawModel)], scanFiles);
+      if (missing.length) {
+        throw new Error(
+          `Le JSON cite ${missing.length > 1 ? 'des images' : 'une image'} (${missing.join(', ')}) : ajoute le scan de l'acte dans le champ prévu avant d'analyser.`
+        );
+      }
+      setFileName('acte collé');
+      await reviewCustomModel(rawModel, images, 'acte-colle.json');
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err.message || 'Impossible de lire cet acte.');
+      setStep('error');
+    }
+  }
+
+  async function reviewCustomModel(rawModel, images, name) {
     const errors = validateCustomImport(rawModel, { availableImagePaths: new Set(images.keys()) });
     if (errors.length) {
       throw new Error(errors.join('\n'));
@@ -87,7 +123,7 @@ export default function ImportWizard() {
 
     const existingMapped = await fetchExistingForDedupe(currentTreeId);
     const found = findDuplicateCandidates(existingMapped, model.individuals, 0.72);
-    const batchId = await createImportBatch(currentTreeId, file.name, model.stats);
+    const batchId = await createImportBatch(currentTreeId, name, model.stats);
 
     // Pas de saveStagingModel ici : la zone de staging IndexedDB (prévue
     // pour les gros fichiers GEDCOM) ne sait pas porter `proofs` ni les
@@ -96,6 +132,7 @@ export default function ImportWizard() {
     setStagingModel(model);
     setImagesByPath(images);
     setCandidates(found);
+    setExistingIndividuals(existingMapped);
     setImportBatchId(batchId);
     setStep('review');
   }
@@ -131,6 +168,7 @@ export default function ImportWizard() {
         importBatchId={importBatchId}
         stagingModel={stagingModel}
         candidates={candidates}
+        existingIndividuals={existingIndividuals}
         imagesByPath={imagesByPath}
         onDone={() => navigate('/individus')}
       />
@@ -160,6 +198,38 @@ export default function ImportWizard() {
           disabled={step === 'parsing'}
         />
       </label>
+
+      <div className="mt-8 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+        <h2 className="text-sm font-semibold">Importer un acte transcrit par une IA</h2>
+        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+          Donne la photo de l'acte et le prompt de <code>docs/PROMPT_ACTE.md</code> à une IA, puis colle ici le JSON qu'elle renvoie et
+          joins le scan. Tu choisiras ensuite, personne par personne, la fiche existante à relier ou la fiche à créer.
+        </p>
+        <textarea
+          className="field mt-3 min-h-[9rem] font-mono text-xs"
+          placeholder='{ "formatVersion": "1.0", "individuals": [ … ], "unions": [ … ] }'
+          aria-label="JSON de l'acte"
+          value={pastedJson}
+          onChange={(e) => setPastedJson(e.target.value)}
+        />
+        <label className="mt-3 block text-xs text-neutral-500 dark:text-neutral-400">
+          Scan de l'acte (une ou plusieurs images, ou un PDF)
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            multiple
+            className="field mt-1"
+            onChange={(e) => setScanFiles(Array.from(e.target.files || []))}
+          />
+        </label>
+        <button
+          onClick={handlePastedAct}
+          disabled={step === 'parsing' || !pastedJson.trim()}
+          className="mt-3 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+        >
+          {step === 'parsing' ? 'Analyse en cours…' : "Analyser l'acte"}
+        </button>
+      </div>
 
       {step === 'error' && <p className="mt-4 whitespace-pre-line text-sm text-red-600">{errorMsg}</p>}
     </div>

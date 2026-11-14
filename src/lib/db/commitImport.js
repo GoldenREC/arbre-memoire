@@ -117,15 +117,63 @@ async function upsertIndividuals(individuals, treeId, importBatchId, placeIdMap)
   }
 
   for (const ind of toUpdate) {
-    const { error } = await supabase
+    // Fiche existante : on complète, on n'efface jamais. Seules les
+    // colonnes vides de la fiche reçoivent la valeur importée ; une valeur
+    // déjà présente n'est remplacée que si l'utilisateur l'a explicitement
+    // choisi dans la revue (ind.overrideFields). Un acte qui ne cite qu'un
+    // nom ne peut donc plus vider une date ou un lieu déjà renseignés.
+    const { data: current, error: readErr } = await supabase
       .from('individuals')
-      .update(shapeRow(ind))
-      .eq('id', ind.existingId);
-    if (error) throw error;
+      .select('*')
+      .eq('id', ind.existingId)
+      .maybeSingle();
+    if (readErr) throw readErr;
+    const patch = buildFillBlanksPatch(current || {}, shapeRow(ind), ind.overrideFields || []);
+    if (Object.keys(patch).length) {
+      const { error } = await supabase.from('individuals').update(patch).eq('id', ind.existingId);
+      if (error) throw error;
+    }
     map.set(ind.localId, ind.existingId);
   }
 
   return map;
+}
+
+const FIELD_TO_COLUMNS = {
+  firstNames: ['first_names'], lastName: ['last_name'], birthName: ['birth_name'], sex: ['sex'],
+  birthDate: ['birth_date', 'birth_date_precision'], birthPlaceLocalId: ['birth_place_id'],
+  deathDate: ['death_date', 'death_date_precision'], deathPlaceLocalId: ['death_place_id'],
+  isDeceased: ['is_deceased'], occupation: ['occupation'], biography: ['biography'],
+};
+const NEVER_UPDATED = new Set(['tree_id', 'import_batch_id', 'gedcom_xref']);
+
+function isBlankColumn(column, value) {
+  if (value === null || value === undefined || value === '') return true;
+  if (column === 'sex') return value === 'U';
+  if (column.endsWith('_precision')) return value === 'unknown';
+  if (column === 'is_deceased') return value === false;
+  return false;
+}
+
+/**
+ * Colonnes à écrire sur une fiche existante : celles qui sont vides et que
+ * l'import renseigne, plus celles des champs que l'utilisateur a choisi
+ * de remplacer (`overrideFields`, noms de champs du modèle de staging).
+ * La précision d'une date suit sa date (jamais l'une sans l'autre).
+ * Fonction pure, testée.
+ */
+export function buildFillBlanksPatch(current, incomingRow, overrideFields = []) {
+  const forced = new Set(overrideFields.flatMap((f) => FIELD_TO_COLUMNS[f] || []));
+  const patch = {};
+  for (const [column, value] of Object.entries(incomingRow)) {
+    if (NEVER_UPDATED.has(column) || column.endsWith('_precision')) continue;
+    if (isBlankColumn(column, value)) continue;
+    if (forced.has(column) || isBlankColumn(column, current[column])) patch[column] = value;
+  }
+  for (const prefix of ['birth', 'death']) {
+    if (`${prefix}_date` in patch) patch[`${prefix}_date_precision`] = incomingRow[`${prefix}_date_precision`] ?? 'unknown';
+  }
+  return patch;
 }
 
 /**
@@ -344,8 +392,33 @@ async function insertDerivedEvents(individuals, families, treeId, individualIdMa
   }
 
   if (!rows.length) return;
-  const { error } = await supabase.from('events').insert(rows);
+  // Naissance, décès, mise en couple, mariage et divorce sont uniques par
+  // personne ou par union : si la fiche (ou l'union) existait déjà et porte
+  // déjà cet événement, on ne le recrée pas. C'est ce qui produisait les
+  // événements en double ou en triple à chaque ré-import ou fiche reliée.
+  const { data: existingEvents, error: readErr } = await supabase
+    .from('events')
+    .select('subject_kind, subject_id, event_type')
+    .eq('tree_id', treeId);
+  if (readErr) throw readErr;
+  const newRows = filterAlreadyRecorded(rows, existingEvents || []);
+  if (!newRows.length) return;
+
+  const { error } = await supabase.from('events').insert(newRows);
   if (error) throw error;
+}
+
+/** Retire les événements uniques déjà enregistrés pour le même sujet (et les doublons internes au lot). Fonction pure. */
+export function filterAlreadyRecorded(rows, existingEvents) {
+  const key = (e) => `${e.subject_kind}:${e.subject_id}:${e.event_type}`;
+  const seen = new Set(existingEvents.map(key));
+  const out = [];
+  for (const row of rows) {
+    if (seen.has(key(row))) continue;
+    seen.add(key(row));
+    out.push(row);
+  }
+  return out;
 }
 
 /**

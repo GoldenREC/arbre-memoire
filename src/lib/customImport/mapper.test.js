@@ -51,7 +51,7 @@ describe('mapCustomImportToStagingModel', () => {
     expect(model.proofs).toEqual([
       expect.objectContaining({
         subjectKind: 'individual', subjectLocalId: 'p1', eventType: 'birth',
-        title: 'Acte de naissance — Jean Durand',
+        title: 'Information familiale — naissance — Jean Durand',
         proof: { type: 'family' },
       }),
     ]);

@@ -10,7 +10,13 @@
  */
 const SEX_VALUES = ['M', 'F', 'U'];
 const DATE_PRECISION_VALUES = ['exact', 'about', 'before', 'after', 'unknown'];
-const PROOF_TYPE_VALUES = ['acte', 'family'];
+const PROOF_TYPE_VALUES = ['acte', 'marginal', 'family'];
+// Événements libres d'une personne (individuals[].events) — "census" est un
+// recensement, enregistré comme une résidence datée (voir mapper.js).
+export const EXTRA_EVENT_TYPE_VALUES = [
+  'residence', 'census', 'occupation', 'military', 'baptism', 'burial',
+  'education', 'immigration', 'emigration', 'religion', 'custom',
+];
 const UNION_STATUS_VALUES = ['ongoing', 'divorced', 'widowed', 'annulled', 'unknown'];
 const UNION_TYPE_VALUES = ['marriage', 'civil_union', 'cohabitation', 'unknown'];
 const FILIATION_TYPE_VALUES = [
@@ -62,8 +68,8 @@ function validateProof(proof, label, errors, availableImagePaths) {
     errors.push(`${label}.type : "${proof.type}" invalide (attendu : ${PROOF_TYPE_VALUES.join('|')}).`);
     return;
   }
-  if (proof.type === 'acte' && !proof.url?.trim() && !proof.imageFile?.trim()) {
-    errors.push(`${label} : type "acte" nécessite "url" ou "imageFile".`);
+  if ((proof.type === 'acte' || proof.type === 'marginal') && !proof.url?.trim() && !proof.imageFile?.trim()) {
+    errors.push(`${label} : type "${proof.type}" nécessite "url" ou "imageFile".`);
   }
   if (proof.imageFile && availableImagePaths && !availableImagePaths.has(proof.imageFile)) {
     errors.push(`${label}.imageFile : "${proof.imageFile}" est référencé mais absent du .zip (dossier images/).`);
@@ -141,6 +147,23 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
     validateDateFacts(ind.birth, `${label}.birth`, errors, availableImagePaths);
     if (ind.isDeceased) {
       validateDateFacts(ind.death, `${label}.death`, errors, availableImagePaths);
+    }
+    if (ind.events !== undefined && ind.events !== null) {
+      if (!Array.isArray(ind.events)) {
+        errors.push(`${label}.events : doit être une liste.`);
+      } else {
+        ind.events.forEach((ev, k) => {
+          const evLabel = `${label}.events[${k}]`;
+          if (!isPlainObject(ev)) {
+            errors.push(`${evLabel} : doit être un objet.`);
+            return;
+          }
+          if (!EXTRA_EVENT_TYPE_VALUES.includes(ev.type)) {
+            errors.push(`${evLabel}.type : "${ev.type}" invalide (attendu : ${EXTRA_EVENT_TYPE_VALUES.join('|')}).`);
+          }
+          validateDateFacts(ev, evLabel, errors, availableImagePaths);
+        });
+      }
     }
   }
 

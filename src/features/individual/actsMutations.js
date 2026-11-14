@@ -119,8 +119,11 @@ async function findIdenticalSourceForEvent(eventId, candidate) {
  * considéré prouvé par original, un acte avec seul permalien en source
  * secondaire, une donnée familiale reste au niveau "probable".
  */
-export async function attachDateProof(treeId, { subjectKind = 'individual', subjectId, individualId, eventType, snapshot, title, proof }) {
-  const eventId = await ensureEvent(treeId, subjectKind, subjectId, eventType, snapshot);
+export async function attachDateProof(treeId, { subjectKind = 'individual', subjectId, individualId, eventType, snapshot, title, proof, eventId: knownEventId = null }) {
+  // `eventId` fourni : la preuve vise cet événement précis (événements
+  // répétables comme une résidence ou un recensement, où "l'événement de
+  // ce type" ne suffit pas à le désigner).
+  const eventId = knownEventId || (await ensureEvent(treeId, subjectKind, subjectId, eventType, snapshot));
   const sourceType = proof.type === 'family' ? 'family_data' : 'civil_record';
   const candidate = {
     title,

@@ -38,6 +38,10 @@ function makeSupabaseMock(initial = {}) {
         this._update = patch;
         return this;
       },
+      maybeSingle() {
+        this._single = true;
+        return this;
+      },
       upsert(rows) {
         const arr = Array.isArray(rows) ? rows : [rows];
         upserted[table] = (upserted[table] || []).concat(arr);
@@ -317,5 +321,63 @@ describe('commitImport — jalons d\'union (mise en couple / mariage / divorce d
     const events = mock.inserted.events;
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ event_type: 'marriage', event_date: '1958-07-19' });
+  });
+});
+
+describe('buildFillBlanksPatch — une fiche existante est complétée, jamais vidée', () => {
+  const current = {
+    first_names: 'Charles', last_name: 'Ternay', sex: 'M',
+    birth_date: '1905-02-23', birth_date_precision: 'exact', birth_place_id: 'place-paris',
+    death_date: null, death_date_precision: 'unknown', death_place_id: null,
+    is_deceased: false, occupation: null, biography: null,
+  };
+
+  it("n'écrit rien quand l'import ne cite qu'un nom déjà connu", async () => {
+    const { buildFillBlanksPatch } = await import('./commitImport.js');
+    const incoming = {
+      tree_id: 't', first_names: 'Charles', last_name: 'Ternay', birth_name: null, sex: 'U',
+      birth_date: null, birth_date_precision: 'unknown', birth_place_id: null,
+      death_date: null, death_date_precision: 'unknown', death_place_id: null,
+      is_deceased: false, occupation: null, biography: null, import_batch_id: 'b',
+    };
+    expect(buildFillBlanksPatch(current, incoming)).toEqual({});
+  });
+
+  it('complète les champs vides (décès, profession) sans toucher à la naissance déjà renseignée', async () => {
+    const { buildFillBlanksPatch } = await import('./commitImport.js');
+    const incoming = {
+      first_names: 'Charles', last_name: 'Ternay', sex: 'M',
+      birth_date: '1905-01-01', birth_date_precision: 'about', birth_place_id: 'place-autre',
+      death_date: '1979-02-25', death_date_precision: 'exact', death_place_id: 'place-donzenac',
+      is_deceased: true, occupation: 'Cultivateur',
+    };
+    expect(buildFillBlanksPatch(current, incoming)).toEqual({
+      death_date: '1979-02-25', death_date_precision: 'exact', death_place_id: 'place-donzenac',
+      is_deceased: true, occupation: 'Cultivateur',
+    });
+  });
+
+  it("remplace une valeur existante seulement pour les champs choisis par l'utilisateur", async () => {
+    const { buildFillBlanksPatch } = await import('./commitImport.js');
+    const incoming = { birth_date: '1905-02-26', birth_date_precision: 'exact', last_name: 'Ternaye' };
+    expect(buildFillBlanksPatch(current, incoming, ['birthDate'])).toEqual({ birth_date: '1905-02-26', birth_date_precision: 'exact' });
+  });
+});
+
+describe('filterAlreadyRecorded', () => {
+  it("ne recrée pas la naissance d'une fiche existante ni le mariage d'une union existante", async () => {
+    const { filterAlreadyRecorded } = await import('./commitImport.js');
+    const rows = [
+      { subject_kind: 'individual', subject_id: 'a', event_type: 'birth' },
+      { subject_kind: 'individual', subject_id: 'a', event_type: 'death' },
+      { subject_kind: 'union', subject_id: 'u', event_type: 'marriage' },
+      { subject_kind: 'individual', subject_id: 'b', event_type: 'birth' },
+      { subject_kind: 'individual', subject_id: 'b', event_type: 'birth' },
+    ];
+    const existing = [
+      { subject_kind: 'individual', subject_id: 'a', event_type: 'birth' },
+      { subject_kind: 'union', subject_id: 'u', event_type: 'marriage' },
+    ];
+    expect(filterAlreadyRecorded(rows, existing).map((r) => `${r.subject_id}:${r.event_type}`)).toEqual(['a:death', 'b:birth']);
   });
 });

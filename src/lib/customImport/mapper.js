@@ -31,6 +31,47 @@ function registerPlace(placesMap, structured) {
   return placesMap.get(key).localId;
 }
 
+/**
+ * Titre d'une source selon le type de preuve : une mention marginale
+ * s'appelle "Mention marginale — …" (c'est à ce titre que le site la
+ * reconnaît, voir features/sources/sourceFilters.js), une information
+ * familiale "Information familiale — …", un acte garde son titre d'acte.
+ */
+function proofTitle(actTitle, subject, proof, what) {
+  if (proof?.type === 'marginal') return `Mention marginale — ${what} — ${subject}`;
+  if (proof?.type === 'family') return `Information familiale — ${what} — ${subject}`;
+  return `${actTitle} — ${subject}`;
+}
+
+const EXTRA_EVENT_LABELS = {
+  residence: 'Résidence', census: 'Recensement', occupation: 'Profession', military: 'Parcours militaire',
+  baptism: 'Baptême', burial: 'Inhumation', education: 'Études', immigration: 'Immigration',
+  emigration: 'Émigration', religion: 'Religion', custom: 'Événement',
+};
+
+/** Événements libres d'une personne (recensement, résidence, parcours militaire...) -> modèle de staging. */
+function mapExtraEvents(ind, placesMap) {
+  return (ind.events || []).map((ev, k) => {
+    // Un recensement s'enregistre comme une résidence datée, étiquetée "Recensement AAAA".
+    const isCensus = ev.type === 'census';
+    const year = ev.date ? ev.date.slice(0, 4) : '';
+    const label = ev.label || (isCensus ? `Recensement${year ? ` ${year}` : ''}` : null);
+    const what = (label || EXTRA_EVENT_LABELS[ev.type] || 'événement').toLowerCase();
+    return {
+      localId: `${ind.localId}:event:${k}`,
+      subjectLocalId: ind.localId,
+      eventType: isCensus ? 'residence' : ev.type,
+      label,
+      date: ev.date || null,
+      datePrecision: ev.datePrecision || (ev.date ? 'exact' : 'unknown'),
+      placeLocalId: registerPlace(placesMap, ev.place),
+      description: ev.description || null,
+      proof: ev.proof || null,
+      title: ev.proof ? proofTitle(label || EXTRA_EVENT_LABELS[ev.type] || 'Acte', fullName(ind), ev.proof, what) : null,
+    };
+  });
+}
+
 function mapIndividual(ind, placesMap, proofs) {
   const birthPlaceLocalId = registerPlace(placesMap, ind.birth?.place);
   const deathPlaceLocalId = ind.isDeceased ? registerPlace(placesMap, ind.death?.place) : null;
@@ -42,7 +83,7 @@ function mapIndividual(ind, placesMap, proofs) {
       eventType: 'birth',
       snapshot: { date: ind.birth.date || null, datePrecision: ind.birth.datePrecision || 'unknown', placeLocalId: birthPlaceLocalId },
       proof: ind.birth.proof,
-      title: `Acte de naissance — ${fullName(ind)}`,
+      title: proofTitle('Acte de naissance', fullName(ind), ind.birth.proof, 'naissance'),
     });
   }
   if (ind.isDeceased && ind.death?.proof) {
@@ -52,7 +93,7 @@ function mapIndividual(ind, placesMap, proofs) {
       eventType: 'death',
       snapshot: { date: ind.death.date || null, datePrecision: ind.death.datePrecision || 'unknown', placeLocalId: deathPlaceLocalId },
       proof: ind.death.proof,
-      title: `Acte de décès — ${fullName(ind)}`,
+      title: proofTitle('Acte de décès', fullName(ind), ind.death.proof, 'décès'),
     });
   }
 
@@ -85,7 +126,10 @@ function resolveUnionType(u) {
 function mapUnion(u, placesMap, proofs, namesByLocalId = new Map()) {
   // Les sources d'une union portent le nom des conjoints, comme celles d'une personne.
   const couple = (u.partners || []).map((id) => namesByLocalId.get(id)).filter(Boolean).join(' & ');
-  const named = (title) => (couple ? `${title} — ${couple}` : title);
+  const named = (title, proof, what) => {
+    const prefix = proof?.type === 'marginal' ? `Mention marginale — ${what}` : title;
+    return couple ? `${prefix} — ${couple}` : prefix;
+  };
   const placeLocalId = registerPlace(placesMap, u.place);
   const unionType = resolveUnionType(u);
   const isMarriage = unionType === 'marriage';
@@ -106,7 +150,7 @@ function mapUnion(u, placesMap, proofs, namesByLocalId = new Map()) {
       eventType: hasOwnMarriageMilestone ? 'union_start' : isMarriage ? 'marriage' : 'union_start',
       snapshot: { date: u.startDate || null, datePrecision: u.startDatePrecision || 'unknown', placeLocalId },
       proof: u.proof,
-      title: named(hasOwnMarriageMilestone || !isMarriage ? 'Mise en couple' : 'Acte de mariage'),
+      title: named(hasOwnMarriageMilestone || !isMarriage ? 'Mise en couple' : 'Acte de mariage', u.proof, hasOwnMarriageMilestone || !isMarriage ? 'mise en couple' : 'mariage'),
     });
   }
   if (hasOwnMarriageMilestone && u.marriage.proof) {
@@ -116,7 +160,7 @@ function mapUnion(u, placesMap, proofs, namesByLocalId = new Map()) {
       eventType: 'marriage',
       snapshot: { date: u.marriage.date || null, datePrecision: u.marriage.datePrecision || 'unknown', placeLocalId: marriagePlaceLocalId },
       proof: u.marriage.proof,
-      title: named('Acte de mariage'),
+      title: named('Acte de mariage', u.marriage.proof, 'mariage'),
     });
   }
   // Preuve distincte pour le divorce (jugement) — rattachée à l'événement
@@ -129,7 +173,7 @@ function mapUnion(u, placesMap, proofs, namesByLocalId = new Map()) {
       eventType: 'divorce',
       snapshot: { date: u.endDate, datePrecision: u.endDatePrecision || 'unknown', placeLocalId: divorcePlaceLocalId },
       proof: u.divorceProof,
-      title: named('Jugement de divorce'),
+      title: named('Jugement de divorce', u.divorceProof, 'divorce'),
     });
   }
 
@@ -167,6 +211,7 @@ export function mapCustomImportToStagingModel(model) {
   const proofs = [];
 
   const individuals = model.individuals.map((ind) => mapIndividual(ind, placesMap, proofs));
+  const events = model.individuals.flatMap((ind) => mapExtraEvents(ind, placesMap));
   const namesByLocalId = new Map(
     model.individuals
       .map((ind) => [ind.localId, [ind.firstNames, ind.lastName].filter(Boolean).join(' ')])
@@ -196,6 +241,9 @@ export function mapCustomImportToStagingModel(model) {
     sources: [],
     places: Array.from(placesMap.values()),
     proofs,
+    events,
+    // Description du document et remarques de lecture (import d'un acte), affichées dans la revue.
+    act: model.act || null,
     stats: {
       individualCount: individuals.length,
       familyCount: families.length,

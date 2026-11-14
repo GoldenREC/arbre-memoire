@@ -400,3 +400,19 @@ résolues, fichiers `imageFile` bien présents dans le zip, valeurs
 d'énumération valides (`sex`, `datePrecision`, `proof.type`, `status`, `unionType`).
 En cas d'erreur, rien n'est importé — la liste des erreurs est affichée
 pour correction.
+
+
+## 7. Import d'un acte isolé (ajouts au format)
+
+Ces ajouts servent à importer un seul acte transcrit — voir le prompt prêt à l'emploi dans `docs/PROMPT_ACTE.md` — depuis **Import / Export → Importer un acte transcrit par une IA** (JSON collé + scan joint, sans fabriquer de .zip). Ils sont facultatifs et compatibles avec les fichiers existants.
+
+| Ajout | Détail |
+| --- | --- |
+| `act` (racine) | Description du document : `type`, `date`, `place`, `repository`, `reference`, `notes`. Non enregistré en base ; `act.notes` s'affiche dans la revue avant import. |
+| `proof.type: "marginal"` | Mention marginale. Exige `url` ou `imageFile` comme un acte. La source créée s'intitule « Mention marginale — … » et l'événement est classé « source secondaire ». |
+| `individuals[].events[]` | Événements libres : `{ type, label, date, datePrecision, place, description, proof }`. Types : `residence`, `census`, `occupation`, `military`, `baptism`, `burial`, `education`, `immigration`, `emigration`, `religion`, `custom`. Un `census` est enregistré comme une résidence intitulée « Recensement AAAA ». Un événement déjà présent à l'identique (type, date, libellé) n'est pas recréé. |
+| Image unique | Pour un JSON collé, si un seul scan est joint il sert pour tous les `imageFile` cités, quel que soit son nom. |
+
+### Revue avant import
+
+Chaque personne du fichier peut être reliée à une fiche existante (proposée par ressemblance, ou choisie à la main) ou créée. Une fiche existante est **complétée, jamais vidée** : seuls ses champs vides reçoivent les valeurs du fichier, et un champ déjà renseigné n'est remplacé que si la revue le demande explicitement. Les événements uniques (naissance, décès, mise en couple, mariage, divorce) déjà présents sur une fiche ou une union existante ne sont pas recréés.
