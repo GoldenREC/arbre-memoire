@@ -27,7 +27,7 @@ export async function fetchMapEvents(treeId, role, privacyThresholdYears = 100) 
   const [{ data: eventRows, error: e1 }, { data: placeRows, error: e2 }, { data: individualRows, error: e3 }, { data: unionRows, error: e4 }, { data: partnerRows, error: e5 }] =
     await Promise.all([
       supabase.from('events').select('id, subject_kind, subject_id, event_type, label, event_date, date_precision, place_id, proof_level').eq('tree_id', treeId).not('place_id', 'is', null),
-      supabase.from('places').select('id, raw_label, latitude, longitude, geocode_status').eq('tree_id', treeId),
+      supabase.from('places').select('id, raw_label, latitude, longitude, geocode_status, geocode_precision').eq('tree_id', treeId),
       supabase.from('individuals').select('id, first_names, last_name, sex, birth_date, death_date, is_deceased').eq('tree_id', treeId),
       supabase.from('unions').select('id').eq('tree_id', treeId),
       supabase.from('union_partners').select('union_id, individual_id, unions!inner(tree_id)').eq('unions.tree_id', treeId),
@@ -82,6 +82,7 @@ export async function fetchMapEvents(treeId, role, privacyThresholdYears = 100) 
       placeLabel: place.raw_label,
       latitude: place.latitude,
       longitude: place.longitude,
+      geocodePrecision: place.geocode_precision,
       people: people.map((p) => ({ id: p.id, name: `${p.firstNames || ''} ${p.lastName || ''}`.trim() || 'Sans nom' })),
     });
   }
@@ -92,7 +93,7 @@ export async function fetchMapEvents(treeId, role, privacyThresholdYears = 100) 
 export async function fetchPlacesWithStatus(treeId) {
   const { data, error } = await supabase
     .from('places')
-    .select('id, raw_label, normalized, latitude, longitude, country, region, geocode_status, geocoded_at')
+    .select('id, raw_label, normalized, latitude, longitude, country, region, geocode_status, geocode_precision, geocoded_at')
     .eq('tree_id', treeId)
     .order('raw_label');
   if (error) throw error;
