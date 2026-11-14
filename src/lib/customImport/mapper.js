@@ -87,6 +87,19 @@ function mapUnion(u, placesMap, proofs) {
       title: 'Acte de mariage',
     });
   }
+  // Preuve distincte pour le divorce (jugement) — rattachée à l'événement
+  // "divorce" généré par commitImport.js (insertDerivedEvents) à partir de
+  // endDate/endDatePrecision, et non à l'acte de mariage lui-même.
+  if (u.divorceProof && u.endDate) {
+    proofs.push({
+      subjectKind: 'union',
+      subjectLocalId: u.localId,
+      eventType: 'divorce',
+      snapshot: { date: u.endDate, datePrecision: u.endDatePrecision || 'unknown', placeLocalId: null },
+      proof: u.divorceProof,
+      title: 'Jugement de divorce',
+    });
+  }
 
   return {
     localId: u.localId,
@@ -96,8 +109,8 @@ function mapUnion(u, placesMap, proofs) {
     startDate: u.startDate || null,
     startDatePrecision: u.startDatePrecision || (u.startDate ? 'exact' : 'unknown'),
     placeLocalId,
-    endDate: null,
-    endDatePrecision: 'unknown',
+    endDate: u.endDate || null,
+    endDatePrecision: u.endDatePrecision || (u.endDate ? 'exact' : 'unknown'),
   };
 }
 

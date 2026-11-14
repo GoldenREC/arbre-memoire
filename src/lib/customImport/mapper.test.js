@@ -128,4 +128,53 @@ describe('mapCustomImportToStagingModel', () => {
       expect.objectContaining({ subjectKind: 'union', subjectLocalId: 'u1', eventType: 'marriage' }),
     ]);
   });
+
+  it("mappe endDate/endDatePrecision d'une union divorcée", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{
+        localId: 'u1', partners: ['a', 'b'], status: 'divorced',
+        startDate: '1924-04-26', startDatePrecision: 'exact',
+        endDate: '1948-06-07', endDatePrecision: 'exact',
+      }],
+    });
+    expect(model.families).toEqual([
+      expect.objectContaining({ localId: 'u1', endDate: '1948-06-07', endDatePrecision: 'exact' }),
+    ]);
+  });
+
+  it('déduit endDatePrecision à "exact" quand seul endDate est fourni', () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], status: 'divorced', endDate: '1948-06-07' }],
+    });
+    expect(model.families[0].endDatePrecision).toBe('exact');
+  });
+
+  it("extrait divorceProof comme une preuve distincte avec eventType 'divorce'", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{
+        localId: 'u1', partners: ['a', 'b'], status: 'divorced',
+        endDate: '1948-06-07', endDatePrecision: 'exact',
+        divorceProof: { type: 'family', transcription: 'Jugement du 07/06/1948.' },
+      }],
+    });
+    expect(model.proofs).toEqual([
+      expect.objectContaining({
+        subjectKind: 'union', subjectLocalId: 'u1', eventType: 'divorce',
+        title: 'Jugement de divorce',
+        snapshot: expect.objectContaining({ date: '1948-06-07', datePrecision: 'exact' }),
+        proof: { type: 'family', transcription: 'Jugement du 07/06/1948.' },
+      }),
+    ]);
+  });
+
+  it("n'extrait pas divorceProof si endDate est absent", () => {
+    const model = mapCustomImportToStagingModel({
+      individuals: [{ localId: 'a' }, { localId: 'b' }],
+      unions: [{ localId: 'u1', partners: ['a', 'b'], divorceProof: { type: 'family' } }],
+    });
+    expect(model.proofs).toEqual([]);
+  });
 });

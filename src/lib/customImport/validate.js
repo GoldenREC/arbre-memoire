@@ -134,6 +134,13 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
       errors,
       availableImagePaths
     );
+    if (u.endDate !== undefined && u.endDate !== null && !ISO_DATE_RE.test(u.endDate)) {
+      errors.push(`${label}.endDate : "${u.endDate}" n'est pas au format AAAA-MM-JJ.`);
+    }
+    if (u.endDatePrecision !== undefined && !DATE_PRECISION_VALUES.includes(u.endDatePrecision)) {
+      errors.push(`${label}.endDatePrecision : "${u.endDatePrecision}" invalide (attendu : ${DATE_PRECISION_VALUES.join('|')}).`);
+    }
+    validateProof(u.divorceProof, `${label}.divorceProof`, errors, availableImagePaths);
   }
 
   return errors;

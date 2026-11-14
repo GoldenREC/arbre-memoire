@@ -138,4 +138,50 @@ describe('validateCustomImport', () => {
     };
     expect(validateCustomImport(model).some((e) => e.includes('.status'))).toBe(true);
   });
+
+  it('refuse un endDate mal formé sur une union', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '07/06/1948' }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('.endDate'))).toBe(true);
+  });
+
+  it('refuse un endDatePrecision invalide sur une union', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '1948-06-07', endDatePrecision: 'peut-etre' }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('.endDatePrecision'))).toBe(true);
+  });
+
+  it('accepte endDate/endDatePrecision valides sur une union divorcée', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{ localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '1948-06-07', endDatePrecision: 'exact' }],
+    };
+    expect(validateCustomImport(model)).toEqual([]);
+  });
+
+  it('refuse un divorceProof "acte" sans url ni imageFile', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{
+        localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '1948-06-07',
+        divorceProof: { type: 'acte' },
+      }],
+    };
+    expect(validateCustomImport(model).some((e) => e.includes('divorceProof') && e.includes('nécessite "url" ou "imageFile"'))).toBe(true);
+  });
+
+  it('accepte un divorceProof "family"', () => {
+    const model = {
+      individuals: [{ localId: 'p1' }, { localId: 'p2' }],
+      unions: [{
+        localId: 'u1', partners: ['p1', 'p2'], status: 'divorced', endDate: '1948-06-07',
+        divorceProof: { type: 'family', transcription: 'Jugement du 07/06/1948.' },
+      }],
+    };
+    expect(validateCustomImport(model)).toEqual([]);
+  });
 });

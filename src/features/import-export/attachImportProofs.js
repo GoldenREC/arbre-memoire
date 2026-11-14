@@ -48,6 +48,9 @@ export async function attachImportProofs(treeId, proofs, { individualIdMap, unio
           type: p.proof.type,
           url: p.proof.url || '',
           file: p.proof.imageFile ? imagesByPath.get(p.proof.imageFile) || null : null,
+          reference: p.proof.reference || '',
+          repository: p.proof.repository || '',
+          transcription: p.proof.transcription || '',
         },
       });
       attached += 1;

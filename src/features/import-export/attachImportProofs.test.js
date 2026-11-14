@@ -33,9 +33,32 @@ describe('attachImportProofs', () => {
       eventType: 'birth',
       snapshot: { date: '1900-01-01', datePrecision: 'exact', placeId: 'real-place-1' },
       title: 'Acte de naissance — Jean Durand',
-      proof: { type: 'acte', url: 'https://archives/acte', file: null },
+      proof: { type: 'acte', url: 'https://archives/acte', file: null, reference: '', repository: '', transcription: '' },
     }));
     expect(result).toEqual({ attached: 1, failed: [] });
+  });
+
+  it('transmet reference/repository/transcription quand fournis par le mapper', async () => {
+    attachDateProofMock.mockResolvedValue({ eventId: 'ev-1', sourceId: 'src-1' });
+    const { attachImportProofs } = await import('./attachImportProofs.js');
+
+    const proofs = [{
+      subjectKind: 'union', subjectLocalId: 'u1', eventType: 'divorce',
+      snapshot: { date: '1948-06-07', datePrecision: 'exact', placeLocalId: null },
+      proof: { type: 'family', transcription: 'Jugement du tribunal civil de la Seine du 07/06/1948.' },
+      title: 'Jugement de divorce',
+    }];
+    const idMaps = { individualIdMap: new Map(), unionIdMap: new Map([['u1', 'real-union-1']]), placeIdMap: new Map() };
+
+    await attachImportProofs('tree-1', proofs, idMaps, new Map());
+
+    expect(attachDateProofMock).toHaveBeenCalledWith('tree-1', expect.objectContaining({
+      subjectKind: 'union', subjectId: 'real-union-1', eventType: 'divorce',
+      proof: expect.objectContaining({
+        type: 'family',
+        transcription: 'Jugement du tribunal civil de la Seine du 07/06/1948.',
+      }),
+    }));
   });
 
   it("résout le fichier image depuis imagesByPath quand proof.imageFile est fourni", async () => {

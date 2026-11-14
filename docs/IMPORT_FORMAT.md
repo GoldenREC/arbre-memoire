@@ -70,9 +70,12 @@ Une entrée par mariage transcrit (acte de mariage).
 | Champ | Type | Obligatoire | Notes |
 |---|---|---|---|
 | `localId` | string | **oui** | Unique dans ce fichier |
-| `partners` | array de `localId` | **oui** | 2 `localId` présents dans `individuals[]` |
-| `status` | `"ongoing"` \| `"divorced"` \| `"widowed"` \| `"annulled"` \| `"unknown"` | non (défaut `"ongoing"`) | |
-| `startDate`, `startDatePrecision`, `place`, `proof` | — | non | Mêmes champs qu'un `DateFacts` (§2.3), sans l'imbrication — directement au niveau de l'union |
+| `partners` | array de `localId` | **oui** | 2 `localId` présents dans `individuals[]`. Si un conjoint n'a pas de fiche détaillée (acte non transcrit), créer quand même une entrée minimale dans `individuals[]` pour lui (voir §2.6) plutôt qu'un champ à part. |
+| `status` | `"ongoing"` \| `"divorced"` \| `"widowed"` \| `"annulled"` \| `"unknown"` | non (défaut `"ongoing"`) | Mettre `"divorced"` dès qu'un jugement de divorce est transcrit |
+| `startDate`, `startDatePrecision`, `place`, `proof` | — | non | Mêmes champs qu'un `DateFacts` (§2.3), sans l'imbrication — directement au niveau de l'union. `proof` ici est la preuve de **l'acte de mariage**. |
+| `endDate` | string (ISO) \| null | non | Date du jugement de divorce (si `status: "divorced"`) |
+| `endDatePrecision` | `"exact"` \| `"about"` \| `"before"` \| `"after"` \| `"unknown"` | non (défaut `"exact"` si `endDate` fourni) | |
+| `divorceProof` | objet `proof` \| null | non | Preuve du **jugement de divorce** — même forme que `proof` (§2.5), mais distincte : elle sera rattachée à l'événement "divorce", pas à l'acte de mariage. Le tribunal et la date de transcription du jugement, s'ils sont connus, vont dans `divorceProof.transcription` (texte libre). |
 
 ### 2.3 Objet `DateFacts` (utilisé par `birth` et `death`)
 
@@ -114,13 +117,37 @@ l'acte ou clairement déduit (ex. le code postal implique souvent le
 département). Ce découpage alimente directement la carte interactive du
 site (géocodage en cascade : du plus précis au plus général).
 
+**Important — ne jamais envoyer un lieu comme une seule chaîne de texte**
+(ex. `"Aix-en-Provence (13), Bouches-du-Rhône, Provence-Alpes-Côte
+d'Azur, France"`). Toujours le découper dans les champs ci-dessus :
+
+```jsonc
+{ "city": "Aix-en-Provence", "department": "Bouches-du-Rhône", "region": "Provence-Alpes-Côte d'Azur", "country": "France" }
+```
+
+Deux pièges fréquents à éviter :
+- Le numéro entre parenthèses après une ville (ex. `"(13)"`, `"(75)"`)
+  est le **numéro du département**, pas un code postal — ne jamais le
+  mettre dans `postalCode`. Soit l'ignorer (le nom complet du
+  département dans `department` suffit), soit l'ajouter entre
+  parenthèses à la fin de `department` si c'est utile à titre indicatif
+  (ex. `"Bouches-du-Rhône (13)"`).
+- Une adresse précise ("38 rue Nanteuil") n'est **pas** un champ à part
+  — elle va dans `streetNumber`/`streetName` de ce même objet `place`
+  (ex. `"streetNumber": "38", "streetName": "rue Nanteuil"`).
+- Un arrondissement ("Paris 15e", "13e arrondissement") va dans
+  `arrondissement`, et `city` reste la ville seule ("Paris").
+
 ### 2.5 Objet `proof` (preuve — acte ou information familiale)
 
 ```jsonc
 {
-  "type": "acte",                                    // "acte" | "family"
-  "url": "https://archives06.fr/ark:/.../p123",       // permalien, si type="acte" et pas d'image
-  "imageFile": "images/durand-jean-naissance-1898.jpg" // chemin dans le zip, si type="acte" et pas d'url
+  "type": "acte",                                       // "acte" | "family"
+  "url": "https://archives06.fr/ark:/.../p123",          // permalien, si type="acte" et pas d'image
+  "imageFile": "images/durand-jean-naissance-1898.jpg",  // chemin dans le zip, si type="acte" et pas d'url
+  "repository": "Archives de Paris",                     // optionnel — dépôt d'archives
+  "reference": "15e arr., acte n°392 du 26/02/1905",     // optionnel — cote exacte de l'acte
+  "transcription": "Déclaré par Joseph Ternay (père). Témoins : Louis Fontanie (45 ans, journalier), Émile Van Accempt (30 ans, journalier)." // optionnel — texte libre
 }
 ```
 
@@ -134,6 +161,34 @@ site (géocodage en cascade : du plus précis au plus général).
   `datePrecision: "exact"` — mais elle peut être fournie même pour une
   date approximative si l'acte existe (par ex. un acte dont seule l'année
   est lisible).
+- `repository` et `reference` sont optionnels et réservés à `type:
+  "acte"` — ils alimentent la fiche de la source (dépôt + cote), pour
+  pouvoir retrouver l'acte aux archives plus tard.
+- `transcription` est le champ **fourre-tout** pour tout ce que l'acte
+  transcrit par Gemini contient et qui n'a pas de case dédiée sur le
+  site : heure de l'acte, déclarant (nom, lien, âge, profession),
+  témoins, mentions spéciales (légitimation, changement de nom,
+  rectification), date de transcription de l'acte dans un autre
+  registre. Rédiger ça en une ou deux phrases lisibles plutôt qu'en
+  JSON imbriqué — voir l'exemple ci-dessus et §2.6.
+
+### 2.6 Cas particuliers
+
+- **Nom de naissance différent du nom actuel** (légitimation, mariage,
+  changement de nom) : utiliser `birthName` sur l'individu (§2.1), pas
+  une note à part. Ex. une personne légitimée qui s'appelait `Renaud` à
+  la naissance et porte maintenant `Anguille` : `"lastName": "Anguille",
+  "birthName": "Renaud"`.
+- **Détail individuel notable** (jumeau, rang de naissance, etc.) : dans
+  `biography` (§2.1), en texte libre — ex. `"Fille jumelle, deuxième
+  née."`
+- **Conjoint cité mais sans acte propre** (ex. un remariage où seul le
+  nom du second conjoint est connu) : créer tout de même une entrée
+  minimale dans `individuals[]` pour lui (juste `localId`,
+  `firstNames`, `lastName`, `sex`), et le référencer normalement dans
+  `unions[].partners`. Ne pas inventer un champ `conjointNom` à part.
+- **Divorce** : voir `endDate`/`endDatePrecision`/`divorceProof` au
+  §2.2.
 
 ## 3. Exemple complet
 
@@ -207,6 +262,112 @@ site (géocodage en cascade : du plus précis au plus général).
   ]
 }
 ```
+
+### 3.1 Exemple avec acte riche, remariage et divorce
+
+Cas réel : un homme né en 1905 à Paris (acte avec déclarant + témoins),
+marié une première fois en 1924 (union dissoute par divorce en 1948),
+remarié en 1958 à une personne dont seul le nom est connu.
+
+```json
+{
+  "formatVersion": "1.0",
+  "individuals": [
+    {
+      "localId": "charles",
+      "firstNames": "Charles",
+      "lastName": "Ternay",
+      "sex": "M",
+      "birth": {
+        "date": "1905-02-23",
+        "datePrecision": "exact",
+        "place": {
+          "streetNumber": "38",
+          "streetName": "rue Nanteuil",
+          "arrondissement": "15e arrondissement",
+          "city": "Paris",
+          "department": "Paris",
+          "country": "France"
+        },
+        "proof": {
+          "type": "acte",
+          "repository": "Archives de Paris",
+          "reference": "15e arr., acte n°392 du 26/02/1905",
+          "transcription": "Né à 19h00. Déclaré par Joseph Marie Mathurin Ternay (père). Témoins : Louis Fontanie (45 ans, journalier, 32 rue des Hospices), Émile Van Accempt (30 ans, journalier, 2 rue des Vignes au Cure)."
+        }
+      },
+      "isDeceased": true,
+      "death": {
+        "date": "1979-02-25",
+        "datePrecision": "exact",
+        "place": { "city": "Donzenac", "department": "Corrèze", "country": "France" },
+        "proof": { "type": "family", "transcription": "Acte transcrit le 1er mars 1979." }
+      },
+      "parents": []
+    },
+    {
+      "localId": "eugenie",
+      "firstNames": "Eugénie",
+      "lastName": "Cropet",
+      "sex": "F",
+      "biography": "Fille jumelle, deuxième née.",
+      "birth": {
+        "date": "1906-12-07",
+        "datePrecision": "exact",
+        "place": { "streetNumber": "1", "streetName": "rue de Lacépède", "arrondissement": "5e arrondissement", "city": "Paris", "department": "Paris", "country": "France" },
+        "proof": {
+          "type": "acte",
+          "repository": "Archives de Paris",
+          "reference": "5e arr., acte n°3239 du 09/12/1906",
+          "transcription": "Née à 11h00 du matin, déclarée le jour même à 21h. Déclarant : Gaston Seveque (30 ans, père absent, a assisté à l'accouchement). Témoins : Raoul Acard (40 ans, sous-employé), Pierre Malabre (50 ans, sous-employé)."
+        }
+      },
+      "parents": []
+    },
+    {
+      "localId": "marguerite",
+      "firstNames": "Marguerite Marie Florgette",
+      "lastName": "Couteau",
+      "sex": "F",
+      "parents": []
+    }
+  ],
+  "unions": [
+    {
+      "localId": "mariage-charles-eugenie",
+      "partners": ["charles", "eugenie"],
+      "status": "divorced",
+      "startDate": "1924-04-26",
+      "startDatePrecision": "exact",
+      "place": { "arrondissement": "13e arrondissement", "city": "Paris", "country": "France" },
+      "endDate": "1948-06-07",
+      "endDatePrecision": "exact",
+      "divorceProof": {
+        "type": "family",
+        "transcription": "Jugement du tribunal civil de la Seine du 07/06/1948, transcrit le 27/11/1948."
+      }
+    },
+    {
+      "localId": "mariage-charles-marguerite",
+      "partners": ["charles", "marguerite"],
+      "status": "ongoing",
+      "startDate": "1958-07-19",
+      "startDatePrecision": "exact",
+      "place": { "city": "Paris", "country": "France" }
+    }
+  ]
+}
+```
+
+Notes sur cet exemple :
+- `marguerite` (second conjoint, seulement nommé) a une fiche minimale
+  plutôt qu'un champ `conjointNom` (voir §2.6).
+- Le divorce porte sa propre preuve (`divorceProof`), distincte de la
+  preuve du mariage lui-même (`proof`, absente ici car l'acte de
+  mariage n'a pas été transcrit).
+- L'heure, le déclarant, les témoins et la date de transcription vont
+  tous dans `transcription`, en texte lisible — jamais comme nouveaux
+  champs structurés.
 
 ## 4. Règle importante : une personne = un seul `localId`
 

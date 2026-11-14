@@ -104,6 +104,32 @@ describe('attachDateProof', () => {
     expect(event.proof_level).toBe('probable');
   });
 
+  it('transmet reference/repository (source) et transcription (citation) quand fournis', async () => {
+    const { attachDateProof } = await import('./actsMutations.js');
+    const { eventId, sourceId } = await attachDateProof('tree-1', {
+      subjectKind: 'individual',
+      subjectId: 'ind-4',
+      individualId: 'ind-4',
+      eventType: 'birth',
+      snapshot: { date: '1905-02-23', datePrecision: 'exact', placeId: null },
+      title: 'Acte de naissance — Charles Ternay',
+      proof: {
+        type: 'acte',
+        file: null,
+        repository: 'Archives de Paris',
+        reference: '15e arr., acte n°392 du 26/02/1905',
+        transcription: 'Déclaré par Joseph Ternay (père). Témoins : Louis Fontanie, Émile Van Accempt.',
+      },
+    });
+
+    const source = mock.tables.sources.find((s) => s.id === sourceId);
+    expect(source.repository).toBe('Archives de Paris');
+    expect(source.call_number).toBe('15e arr., acte n°392 du 26/02/1905');
+
+    const citation = mock.tables.citations.find((c) => c.event_id === eventId);
+    expect(citation.transcription).toBe('Déclaré par Joseph Ternay (père). Témoins : Louis Fontanie, Émile Van Accempt.');
+  });
+
   it('réutilise un événement déjà existant plutôt que d\'en recréer un', async () => {
     mock.tables.events.push({ id: 'ev-existing', subject_kind: 'individual', subject_id: 'ind-3', event_type: 'birth' });
     const { attachDateProof } = await import('./actsMutations.js');

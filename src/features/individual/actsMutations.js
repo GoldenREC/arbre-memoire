@@ -68,22 +68,40 @@ export async function detachCitation(citationId) {
 /**
  * Enregistre la preuve d'une date exacte (naissance/décès) saisie
  * directement depuis le formulaire de fiche (création ou édition),
- * via DateProofInput. `proof` est { type: 'acte'|'family', url, file }.
- * Crée (ou retrouve) l'événement concerné, la source — classée "Acte"
- * (civil_record) ou "Donnée familiale" (family_data) — y attache le
- * fichier envoyé le cas échéant, cite l'événement, puis ajuste
- * l'indice de preuve en conséquence : un acte avec scan est considéré
- * prouvé par original, un acte avec seul permalien en source
+ * via DateProofInput, ou transmise en bloc par l'import personnalisé
+ * (voir customImport/, docs/IMPORT_FORMAT.md). `proof` est
+ * { type: 'acte'|'family', url, file, reference?, repository?,
+ * transcription? } — `reference`, `repository` et `transcription` sont
+ * optionnels et ignorés par DateProofInput (qui ne les collecte pas),
+ * mais portés par un import riche en détails d'acte (cote d'archive,
+ * dépôt d'archives, déclarant, témoins, mentions spéciales...) :
+ * `repository` devient le dépôt de la source (sources.repository, ex.
+ * "Archives de Paris"), `reference` sa cote (sources.call_number, ex.
+ * "15e arr., acte n°392 du 26/02/1905"), `transcription` la
+ * transcription de la citation (citations.transcription — le champ
+ * prévu pour ça, pour tout ce qui n'a pas de colonne dédiée : heure de
+ * l'acte, déclarant, témoins, mentions spéciales, date de
+ * transcription...). Crée (ou retrouve) l'événement concerné, la source —
+ * classée "Acte" (civil_record) ou "Donnée familiale" (family_data) —
+ * y attache le fichier envoyé le cas échéant, cite l'événement, puis
+ * ajuste l'indice de preuve en conséquence : un acte avec scan est
+ * considéré prouvé par original, un acte avec seul permalien en source
  * secondaire, une donnée familiale reste au niveau "probable".
  */
 export async function attachDateProof(treeId, { subjectKind = 'individual', subjectId, individualId, eventType, snapshot, title, proof }) {
   const eventId = await ensureEvent(treeId, subjectKind, subjectId, eventType, snapshot);
   const sourceType = proof.type === 'family' ? 'family_data' : 'civil_record';
-  const sourceId = await createSource(treeId, { title, sourceType, url: proof.url?.trim() || null });
+  const sourceId = await createSource(treeId, {
+    title,
+    sourceType,
+    url: proof.url?.trim() || null,
+    repository: proof.repository?.trim() || null,
+    callNumber: proof.reference?.trim() || null,
+  });
   if (proof.file) {
     await uploadMediaFile(treeId, proof.file, { mediaType: 'document', sourceId, title: proof.file.name, folder: 'actes' });
   }
-  await addCitation(treeId, { eventId, individualId, sourceId });
+  await addCitation(treeId, { eventId, individualId, sourceId, transcription: proof.transcription?.trim() || null });
   const proofLevel = proof.type === 'family' ? 'probable' : proof.file ? 'proven_original' : 'proven_secondary';
   await updateEventProofLevel(eventId, proofLevel);
   return { eventId, sourceId };
