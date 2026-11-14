@@ -4,6 +4,7 @@ import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import EventForm, { EVENT_TYPE_LABELS } from './EventForm.jsx';
 import { createEvent, updateEvent, deleteEvent } from './individualMutations.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const EVENT_ICONS = {
   birth: '👶', death: '⚰️', marriage: '💍', divorce: '💔', engagement: '💞',
@@ -110,18 +111,29 @@ export default function Timeline({ individual, events, parents, childGroups, pla
   }, [individual, events, parents, childGroups, places]);
 
   async function handleSaveEvent(form) {
-    if (formState.event) {
-      await updateEvent(formState.event.id, treeId, form);
-    } else {
-      await createEvent(treeId, 'individual', individual.id, form);
+    try {
+      if (formState.event) {
+        await updateEvent(formState.event.id, treeId, form);
+      } else {
+        await createEvent(treeId, 'individual', individual.id, form);
+      }
+      onChanged?.();
+      pushToast('Événement enregistré.');
+    } catch (err) {
+      pushErrorToast(err.message);
+      throw err; // garde la modale ouverte, le brouillon n'est pas perdu
     }
-    onChanged?.();
   }
 
   async function handleDeleteEvent(eventId) {
-    await deleteEvent(eventId);
-    setFormState(null);
-    onChanged?.();
+    try {
+      await deleteEvent(eventId);
+      setFormState(null);
+      onChanged?.();
+      pushToast('Événement supprimé.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   return (

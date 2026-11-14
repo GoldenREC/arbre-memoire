@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { updateBiography } from './individualMutations.js';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 export default function NotesTab({ individual, canEdit, onChanged }) {
   const [editing, setEditing] = useState(false);
@@ -12,6 +13,9 @@ export default function NotesTab({ individual, canEdit, onChanged }) {
       await updateBiography(individual.id, text);
       setEditing(false);
       onChanged?.();
+      pushToast('Note enregistrée.');
+    } catch (err) {
+      pushErrorToast(err.message);
     } finally {
       setSaving(false);
     }

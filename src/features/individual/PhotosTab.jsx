@@ -6,6 +6,7 @@ import PhotoViewer from '../media/PhotoViewer.jsx';
 import { listPetsForIndividual, createPet, linkPetToIndividual } from '../pets/petsMutations.js';
 import PetPicker from '../pets/PetPicker.jsx';
 import PetDetailModal from '../pets/PetDetailModal.jsx';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 /**
  * Onglet "Photos & animaux" de la fiche individu : photos où cette
@@ -51,6 +52,9 @@ export default function PhotosTab({ individual, canEdit }) {
       const mediaId = await uploadPhoto(treeId, file, { title: file.name });
       await linkMediaToSubject(mediaId, 'individual', individual.id);
       await reloadPhotos();
+      pushToast('Photo ajoutée.');
+    } catch (err) {
+      pushErrorToast(err.message);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -58,19 +62,29 @@ export default function PhotosTab({ individual, canEdit }) {
   }
 
   async function handleLinkExistingPet(pet) {
-    await linkPetToIndividual(pet.id, individual.id);
-    await reloadPets();
+    try {
+      await linkPetToIndividual(pet.id, individual.id);
+      await reloadPets();
+      pushToast('Animal associé.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   async function handleCreatePet(e) {
     e.preventDefault();
     if (!newPetName.trim()) return;
-    const petId = await createPet(treeId, { name: newPetName.trim(), species: newPetSpecies.trim() || null });
-    await linkPetToIndividual(petId, individual.id);
-    setNewPetName('');
-    setNewPetSpecies('');
-    setCreatingPet(false);
-    await reloadPets();
+    try {
+      const petId = await createPet(treeId, { name: newPetName.trim(), species: newPetSpecies.trim() || null });
+      await linkPetToIndividual(petId, individual.id);
+      setNewPetName('');
+      setNewPetSpecies('');
+      setCreatingPet(false);
+      await reloadPets();
+      pushToast('Animal ajouté.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   const lifePathHref = `/carte?individual=${individual.id}&name=${encodeURIComponent(`${individual.firstNames || ''} ${individual.lastName || ''}`.trim())}`;

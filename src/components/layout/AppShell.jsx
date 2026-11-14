@@ -4,6 +4,7 @@ import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import QuickSearch from './QuickSearch.jsx';
 import ShortcutsHelp from './ShortcutsHelp.jsx';
+import ToastHost from '../ui/ToastHost.jsx';
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts.js';
 
 export default function AppShell() {
@@ -28,6 +29,7 @@ export default function AppShell() {
       </div>
       {quickSearchOpen && <QuickSearch onClose={closeQuickSearch} />}
       {helpOpen && <ShortcutsHelp onClose={closeHelp} />}
+      <ToastHost />
     </div>
   );
 }

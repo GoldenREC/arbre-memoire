@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import NmdBadges from './NmdBadges.jsx';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const SEX_OPTIONS = [
   { value: 'M', label: 'Masculin' },
@@ -55,6 +56,9 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
         { birth: form.birthPlace, death: form.deathPlace }
       );
       setEditing(false);
+      pushToast('Fiche enregistrée.');
+    } catch (err) {
+      pushErrorToast(err.message);
     } finally {
       setSaving(false);
     }

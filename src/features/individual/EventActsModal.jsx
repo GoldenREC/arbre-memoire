@@ -6,6 +6,7 @@ import { listSources } from '../sources/sourcesMutations.js';
 import { ensureEvent, updateEventProofLevel } from './individualMutations.js';
 import { getMediaSignedUrl } from '../../lib/db/mediaStorage.js';
 import { PROOF_LEVELS } from '../../lib/utils/proofLevel.js';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 /**
  * Modale d'attache/gestion des actes pour une pastille N, M ou D :
@@ -81,6 +82,9 @@ export default function EventActsModal({
       setNewTitle(defaultTitle || '');
       if (fileInputRef.current) fileInputRef.current.value = '';
       onChanged?.();
+      pushToast('Acte rattaché.');
+    } catch (err) {
+      pushErrorToast(err.message);
     } finally {
       setSaving(false);
     }
@@ -106,22 +110,37 @@ export default function EventActsModal({
       setMode(null);
       setExistingSourceId('');
       onChanged?.();
+      pushToast('Acte rattaché.');
+    } catch (err) {
+      pushErrorToast(err.message);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDetach(citationId) {
-    await detachCitation(citationId);
-    await reloadActs(eventId);
-    onChanged?.();
+    try {
+      await detachCitation(citationId);
+      await reloadActs(eventId);
+      onChanged?.();
+      pushToast('Acte détaché.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   async function handleProofLevelChange(value) {
+    const previous = proofLevel;
     setProofLevel(value);
-    const id = await withEventId();
-    await updateEventProofLevel(id, value);
-    onChanged?.();
+    try {
+      const id = await withEventId();
+      await updateEventProofLevel(id, value);
+      onChanged?.();
+      pushToast('Indice de preuve mis à jour.');
+    } catch (err) {
+      setProofLevel(previous);
+      pushErrorToast(err.message);
+    }
   }
 
   return (

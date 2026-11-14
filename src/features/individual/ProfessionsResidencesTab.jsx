@@ -3,6 +3,7 @@ import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import EventForm, { EVENT_TYPE_LABELS } from './EventForm.jsx';
 import { createEvent, updateEvent, deleteEvent } from './individualMutations.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
+import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 
 const TYPES = ['occupation', 'residence'];
 
@@ -11,14 +12,25 @@ export default function ProfessionsResidencesTab({ individual, events, places, t
   const relevant = events.filter((e) => e.origin === 'individual' && TYPES.includes(e.eventType));
 
   async function handleSave(form) {
-    if (formState.event) await updateEvent(formState.event.id, treeId, form);
-    else await createEvent(treeId, 'individual', individual.id, form);
-    onChanged?.();
+    try {
+      if (formState.event) await updateEvent(formState.event.id, treeId, form);
+      else await createEvent(treeId, 'individual', individual.id, form);
+      onChanged?.();
+      pushToast('Événement enregistré.');
+    } catch (err) {
+      pushErrorToast(err.message);
+      throw err; // garde la modale ouverte, le brouillon n'est pas perdu
+    }
   }
   async function handleDelete(eventId) {
-    await deleteEvent(eventId);
-    setFormState(null);
-    onChanged?.();
+    try {
+      await deleteEvent(eventId);
+      setFormState(null);
+      onChanged?.();
+      pushToast('Événement supprimé.');
+    } catch (err) {
+      pushErrorToast(err.message);
+    }
   }
 
   return (
