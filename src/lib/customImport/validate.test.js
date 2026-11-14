@@ -44,6 +44,17 @@ describe('validateCustomImport', () => {
     expect(errors.some((e) => e.includes('parents') && e.includes('inconnu'))).toBe(true);
   });
 
+  it('signale un "null" dans "parents" (parent inconnu mal représenté) avec un message explicite', () => {
+    const model = {
+      individuals: [
+        { localId: 'enfant', parents: [null, 'mere'] },
+        { localId: 'mere' },
+      ],
+    };
+    const errors = validateCustomImport(model);
+    expect(errors.some((e) => e.includes('.parents') && e.includes('parent inconnu'))).toBe(true);
+  });
+
   it('accepte une référence "parents" valide', () => {
     const model = {
       individuals: [

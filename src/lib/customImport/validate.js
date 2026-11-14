@@ -94,7 +94,11 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
         errors.push(`${label}.parents : doit être une liste de localId.`);
       } else {
         for (const parentId of ind.parents) {
-          if (!localIds.has(parentId)) {
+          if (parentId === null || parentId === undefined) {
+            errors.push(
+              `${label}.parents : contient un parent inconnu (null) — un parent non identifié ne doit pas apparaître dans la liste, retire simplement cette entrée (ex. ["mere"] au lieu de [null, "mere"]).`
+            );
+          } else if (!localIds.has(parentId)) {
             errors.push(`${label}.parents : référence "${parentId}" introuvable dans "individuals".`);
           }
         }

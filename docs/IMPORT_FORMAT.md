@@ -61,7 +61,7 @@ français classique).
 | `isDeceased` | boolean | non (défaut `false`) | Mettre `true` dès qu'un décès est connu, même sans date exacte |
 | `birth` | objet `DateFacts` \| null | non | Voir §2.3 |
 | `death` | objet `DateFacts` \| null | non | Voir §2.3 — ignoré si `isDeceased` n'est pas `true` |
-| `parents` | array de `localId` | non | 0 à 2 (ou plus, familles recomposées) `localId` d'autres entrées de `individuals[]`. Laisser vide si les parents ne sont pas transcrits comme fiches séparées. |
+| `parents` | array de `localId` | non | 0 à 2 (ou plus, familles recomposées) `localId` d'autres entrées de `individuals[]`. Laisser vide si les parents ne sont pas transcrits comme fiches séparées. **Un parent inconnu (enfant naturel, père non déclaré...) ne doit jamais apparaître comme `null` dans la liste — omettre simplement cette entrée** : `["mere"]`, pas `[null, "mere"]`. |
 
 ### 2.2 `unions[]`
 
