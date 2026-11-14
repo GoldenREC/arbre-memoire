@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { updateMemberPreferences } from '../../lib/db/settingsMutations.js';
 import { SUPPORTED_LANGUAGES } from '../../i18n/index.js';
 import IndividualPicker from '../individual/IndividualPicker.jsx';
+import { supabase } from '../../lib/supabaseClient.js';
+import { pushErrorToast } from '../../store/useToastStore.js';
 
 function Toggle({ checked, onChange, label }) {
   return (
@@ -29,13 +31,36 @@ export default function PreferencesPanel() {
   const { currentTreeId, user, preferences, setPreferences } = useAuthStore();
   const { theme, setTheme } = useTheme();
   const [saving, setSaving] = useState(false);
-  const [rootName, setRootName] = useState(null);
+  const [rootName, setRootName] = useState(null); // { id, label } | null
+
+  const defaultRootIndividualId = preferences?.defaultRootIndividualId;
+
+  // Si la préférence est déjà définie (chargée depuis la base, ou
+  // positionnée sur un autre appareil) on n'a que l'UUID — on va
+  // chercher le nom à afficher, plutôt que de laisser échapper
+  // l'identifiant brut dans l'écran ci-dessous.
+  useEffect(() => {
+    if (!defaultRootIndividualId || rootName?.id === defaultRootIndividualId) return;
+    let cancelled = false;
+    supabase
+      .from('individuals')
+      .select('first_names, last_name')
+      .eq('id', defaultRootIndividualId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setRootName({ id: defaultRootIndividualId, label: data ? `${data.first_names || ''} ${data.last_name || ''}`.trim() : null });
+      });
+    return () => { cancelled = true; };
+  }, [defaultRootIndividualId, rootName]);
 
   async function save(patch) {
     setSaving(true);
     try {
       await updateMemberPreferences(currentTreeId, user.id, patch);
       setPreferences(patch);
+    } catch (err) {
+      pushErrorToast(err.message);
     } finally {
       setSaving(false);
     }
@@ -110,7 +135,9 @@ export default function PreferencesPanel() {
         <p className="mb-3 text-xs text-neutral-500">{t('settings.preferences.defaultRootHelp')}</p>
         {prefs.defaultRootIndividualId ? (
           <div className="flex items-center gap-2 text-sm">
-            <span className="flex-1 rounded-lg bg-neutral-50 px-3 py-1.5 dark:bg-neutral-800">{rootName || prefs.defaultRootIndividualId}</span>
+            <span className="flex-1 rounded-lg bg-neutral-50 px-3 py-1.5 dark:bg-neutral-800">
+              {rootName?.id === prefs.defaultRootIndividualId ? rootName.label || 'Personne introuvable' : '…'}
+            </span>
             <button onClick={() => save({ defaultRootIndividualId: null })} className="text-xs text-red-600 hover:underline">
               {t('settings.preferences.defaultRootClear')}
             </button>
@@ -121,7 +148,7 @@ export default function PreferencesPanel() {
             <IndividualPicker
               treeId={currentTreeId}
               onSelect={(r) => {
-                setRootName(`${r.first_names || ''} ${r.last_name || ''}`.trim());
+                setRootName({ id: r.id, label: `${r.first_names || ''} ${r.last_name || ''}`.trim() });
                 save({ defaultRootIndividualId: r.id });
               }}
               placeholder="Choisir une personne…"
