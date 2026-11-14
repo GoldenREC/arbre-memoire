@@ -33,7 +33,7 @@ export default function FamilyTreeContainer() {
 }
 
 function FamilyTreeExplorer() {
-  const { loading, error, graph, rootId, setRootId, generations, setGenerations } = useFamilyTree();
+  const { loading, error, graph, rootId, setRootId, generations, setGenerations, orientation, setOrientation } = useFamilyTree();
   const [tab, setTab] = useState('ascendance');
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
@@ -99,6 +99,25 @@ function FamilyTreeExplorer() {
           />
           <span className="w-4 text-center">{generations}</span>
         </label>
+
+        {tab === 'ascendance' && (
+          <div className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+            <button
+              onClick={() => setOrientation('horizontal')}
+              title="Orientation gauche → droite"
+              className={`rounded px-2 py-1 ${orientation === 'horizontal' ? 'bg-accent-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
+            >
+              ↔ Gauche → droite
+            </button>
+            <button
+              onClick={() => setOrientation('vertical')}
+              title="Orientation haut → bas"
+              className={`rounded px-2 py-1 ${orientation === 'vertical' ? 'bg-accent-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
+            >
+              ↕ Haut → bas
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-neutral-200 dark:border-neutral-800">
