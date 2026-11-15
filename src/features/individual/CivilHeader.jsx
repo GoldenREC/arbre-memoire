@@ -9,6 +9,7 @@ import { PRECISION_OPTIONS } from '../../lib/utils/datePrecision.js';
 import { fetchStructuredPlace } from './individualMutations.js';
 import { attachDateProof } from './actsMutations.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
+import { bornMoreThanYearsAgo, effectiveDeceased } from '../../lib/utils/deceasedRule.js';
 
 const SEX_OPTIONS = [
   { value: 'M', label: 'Masculin' },
@@ -40,7 +41,10 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
   const hasBirthProof = !!birthEvent && (citations || []).some((c) => c.eventId === birthEvent.id);
   const hasDeathProof = !!deathEvent && (citations || []).some((c) => c.eventId === deathEvent.id);
   const birthProofRequired = !!form.birthDate && form.birthDatePrecision === 'exact' && !hasBirthProof;
-  const deathProofRequired = form.isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact' && !hasDeathProof;
+  // Règle des 130 ans : une naissance trop ancienne impose « décédé ».
+  const forcedDeceased = bornMoreThanYearsAgo(form.birthDate);
+  const isDeceased = effectiveDeceased(form.isDeceased, form.birthDate);
+  const deathProofRequired = isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact' && !hasDeathProof;
 
   /**
    * Les lieux structurés (les 9 champs) ne sont chargés qu'à l'ouverture
@@ -102,7 +106,7 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
           birthDatePrecision: form.birthDatePrecision,
           deathDate: form.deathDate || null,
           deathDatePrecision: form.deathDatePrecision,
-          isDeceased: form.isDeceased,
+          isDeceased,
           occupation: form.occupation,
         },
         placesPatch
@@ -195,10 +199,10 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
           )}
 
           <Field label="Décédé(e) ?">
-            <input type="checkbox" checked={form.isDeceased} onChange={(e) => setForm((f) => ({ ...f, isDeceased: e.target.checked }))} />
+            <input type="checkbox" checked={isDeceased} disabled={forcedDeceased} onChange={(e) => setForm((f) => ({ ...f, isDeceased: e.target.checked }))} />
           </Field>
 
-          {form.isDeceased && (
+          {isDeceased && (
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <BlockField label="Date de décès">

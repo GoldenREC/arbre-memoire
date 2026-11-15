@@ -8,6 +8,7 @@ import { PRECISION_OPTIONS } from '../../lib/utils/datePrecision.js';
 import { createIndividualFull, addParentLink, linkAsSibling } from './individualMutations.js';
 import { attachDateProof } from './actsMutations.js';
 import { pushErrorToast, pushToast } from '../../store/useToastStore.js';
+import { bornMoreThanYearsAgo, effectiveDeceased } from '../../lib/utils/deceasedRule.js';
 
 const RELATION_LABELS = (sex) => ({
   father: 'Père',
@@ -71,7 +72,10 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
   }
 
   const birthProofRequired = !!form.birthDate && form.birthDatePrecision === 'exact';
-  const deathProofRequired = form.isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact';
+  // Règle des 130 ans : une naissance trop ancienne impose « décédé ».
+  const forcedDeceased = bornMoreThanYearsAgo(form.birthDate);
+  const isDeceased = effectiveDeceased(form.isDeceased, form.birthDate);
+  const deathProofRequired = isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact';
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -85,7 +89,7 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
     }
     setSaving(true);
     try {
-      const created = await createIndividualFull(treeId, form);
+      const created = await createIndividualFull(treeId, { ...form, isDeceased });
       const personName = `${created.first_names || ''} ${created.last_name || ''}`.trim();
       if (birthProofRequired) {
         await attachDateProof(treeId, {
@@ -161,12 +165,15 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
       <RadioToggle
         label="Statut"
         name="deceased"
-        value={form.isDeceased ? 'deceased' : 'alive'}
+        value={isDeceased ? 'deceased' : 'alive'}
         options={[{ value: 'alive', label: 'Vivant(e)' }, { value: 'deceased', label: 'Décédé(e)' }]}
         onChange={(v) => patch({ isDeceased: v === 'deceased' })}
       />
+      {forcedDeceased && (
+        <p className="text-xs text-neutral-500">Née il y a plus de 130 ans : la personne est considérée comme décédée.</p>
+      )}
 
-      {form.isDeceased && (
+      {isDeceased && (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Date de décès">

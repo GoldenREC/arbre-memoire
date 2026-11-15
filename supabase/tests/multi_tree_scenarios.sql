@@ -196,3 +196,12 @@ select count(*) as compte_b1_restant from auth.users where id='00000000-0000-000
 \echo '== Q. Membre (sans arbre possédé) : suppression de compte autorisée'
 delete from auth.users where id='00000000-0000-0000-0000-00000000000d';
 select count(*) as compte_d_restant from auth.users where id='00000000-0000-0000-0000-00000000000d';
+
+-- ---------------------------------------------------------------------
+-- R. Règle des 130 ans (à exécuter après deceased_130.sql)
+-- ---------------------------------------------------------------------
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000000a',false);
+select create_tree_with_admin('Test 130') as t130 \gset
+insert into individuals (tree_id, first_names, last_name, birth_date, is_deceased) values (:'t130','Ancien','Ne','1850-01-01',false) returning is_deceased as ancien_attendu_vrai;
+insert into individuals (tree_id, first_names, last_name, birth_date, is_deceased) values (:'t130','Recent','Ne','1990-01-01',false) returning is_deceased as recent_attendu_faux;

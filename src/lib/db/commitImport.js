@@ -21,6 +21,7 @@
  */
 import { supabase } from '../supabaseClient.js';
 import { composePlaceLabel, isPlaceEmpty } from '../utils/placeLabel.js';
+import { effectiveDeceased } from '../utils/deceasedRule.js';
 
 /**
  * Un lieu de staging est soit { localId, rawLabel } (GEDCOM — chaîne
@@ -97,7 +98,7 @@ async function upsertIndividuals(individuals, treeId, importBatchId, placeIdMap)
     death_date: ind.deathDate ?? null,
     death_date_precision: ind.deathDatePrecision ?? 'unknown',
     death_place_id: ind.deathPlaceLocalId ? placeIdMap.get(ind.deathPlaceLocalId) ?? null : null,
-    is_deceased: !!ind.isDeceased,
+    is_deceased: effectiveDeceased(ind.isDeceased, ind.birthDate),
     occupation: ind.occupation ?? null,
     biography: ind.biography ?? null,
     gedcom_xref: ind.gedcomXref ?? null,
@@ -334,7 +335,7 @@ async function insertDerivedEvents(individuals, families, treeId, individualIdMa
         place_id: ind.birthPlaceLocalId ? placeIdMap.get(ind.birthPlaceLocalId) ?? null : null,
       });
     }
-    if (ind.isDeceased) {
+    if (effectiveDeceased(ind.isDeceased, ind.birthDate)) {
       rows.push({
         tree_id: treeId, subject_kind: 'individual', subject_id: subjectId,
         event_type: 'death', event_date: ind.deathDate ?? null,
