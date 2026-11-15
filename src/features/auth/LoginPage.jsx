@@ -29,7 +29,9 @@ export default function LoginPage() {
       if (mode === 'signin') {
         await signInWithPassword(email, password);
       } else {
-        await signUp(email, password);
+        // Le lien de confirmation doit ramener sur l'app (avec son chemin de base,
+        // ex. /arbre-memoire/ sur GitHub Pages), et non sur la racine du domaine.
+        await signUp(email, password, { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` });
         setInfo('Compte créé. Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.');
       }
     } catch {
