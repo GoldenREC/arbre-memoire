@@ -68,13 +68,14 @@ export async function sendTransferMail(transferId, kind) {
 // --- Cadenas -------------------------------------------------------------
 
 /** Ensemble des cadenas posés sur l'arbre, sous la forme "kind:id". */
-export async function fetchLockKeys(treeId) {
-  const { data, error } = await supabase
-    .from('record_locks')
-    .select('target_kind, target_id')
-    .eq('tree_id', treeId);
+/**
+ * État effectif des cadenas (direct ou hérité par cascade) : Map
+ * "kind:id" -> { direct, reason }. Calculé par la base (effective_locks).
+ */
+export async function fetchEffectiveLocks(treeId) {
+  const { data, error } = await supabase.rpc('effective_locks', { p_tree_id: treeId });
   if (error) throw error;
-  return new Set((data || []).map((row) => `${row.target_kind}:${row.target_id}`));
+  return new Map((data || []).map((row) => [`${row.target_kind}:${row.target_id}`, { direct: row.direct, reason: row.reason }]));
 }
 
 /** Pose (locked = true) ou retire (false) un cadenas. Propriétaire uniquement (base). */
