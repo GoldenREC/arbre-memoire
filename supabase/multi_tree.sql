@@ -312,19 +312,63 @@ create policy "locks: pose par le propriétaire" on record_locks for insert
 create policy "locks: retrait par le propriétaire" on record_locks for delete
   using (is_tree_owner(tree_id));
 
-create or replace function media_locked(p_media uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from record_locks where target_kind = 'media' and target_id = p_media);
-$$;
+-- Cascade DIRECTE (choix du propriétaire) :
+--  * une fiche cadenassée protège : ses événements, ses actes (médias liés
+--    et actes cités), et la fiche de son/ses conjoint(s) lié(s) par un
+--    événement de mariage ;
+--  * la protection ne va pas plus loin : le conjoint d'un conjoint n'est
+--    pas protégé par ce seul lien.
 
-create or replace function individual_locked(p_ind uuid)
+-- Cadenas posé sur la fiche elle-même.
+create or replace function individual_direct_locked(p_ind uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from record_locks where target_kind = 'individual' and target_id = p_ind);
 $$;
 
+-- Conjoints liés à p_ind par une union dont un événement de mariage existe.
+create or replace function spouses_of(p_ind uuid)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select up2.individual_id
+  from union_partners up1
+  join union_partners up2 on up2.union_id = up1.union_id
+                         and up2.individual_id <> up1.individual_id
+  where up1.individual_id = p_ind
+    and exists (select 1 from events e where e.subject_kind = 'union'
+                  and e.subject_id = up1.union_id and e.event_type = 'marriage');
+$$;
+
+-- Fiche protégée : cadenassée elle-même, ou conjoint direct (mariage)
+-- d'une fiche cadenassée elle-même.
+create or replace function individual_locked(p_ind uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select individual_direct_locked(p_ind)
+    or exists (select 1 from spouses_of(p_ind) s where individual_direct_locked(s));
+$$;
+
+-- Événement cadenassé : lui-même, ou événement d'une fiche protégée, ou
+-- événement de mariage dont un conjoint est cadenassé directement.
 create or replace function event_locked(p_event uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from record_locks where target_kind = 'event' and target_id = p_event);
+  select exists (select 1 from record_locks where target_kind = 'event' and target_id = p_event)
+    or exists (select 1 from events e where e.id = p_event
+                 and e.subject_kind = 'individual' and individual_locked(e.subject_id))
+    or exists (select 1 from events e join union_partners up on up.union_id = e.subject_id
+                 where e.id = p_event and e.subject_kind = 'union'
+                   and individual_direct_locked(up.individual_id));
+$$;
+
+-- Acte cadenassé : lui-même, ou lié à une fiche protégée (media_links),
+-- ou cité par une fiche protégée / un événement cadenassé.
+create or replace function media_locked(p_media uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from record_locks where target_kind = 'media' and target_id = p_media)
+    or exists (select 1 from media_links ml
+                 where ml.media_id = p_media and ml.subject_kind = 'individual'
+                   and individual_locked(ml.subject_id))
+    or exists (select 1 from media m join citations c on c.source_id = m.source_id
+                 where m.id = p_media and (
+                   (c.individual_id is not null and individual_locked(c.individual_id))
+                   or (c.event_id is not null and event_locked(c.event_id))));
 $$;
 
 -- Un événement est "protégé" si un de ses actes (source d'une citation
@@ -458,6 +502,11 @@ begin
   select tree_id into v_tree from individuals where id = p_individual_id;
   if v_tree is null then raise exception 'Fiche introuvable.'; end if;
   if not is_tree_owner(v_tree) then raise exception 'Seul le propriétaire peut supprimer une fiche.'; end if;
+  -- Vérification anticipée : sans elle, la suppression des événements lève
+  -- le mauvais message (« événement lié à un acte »).
+  if individual_blocks_delete(p_individual_id) then
+    raise exception 'Cette fiche est cadenassée, ou contient un acte cadenassé. Retire le cadenas avant de la supprimer.';
+  end if;
 
   delete from events where subject_kind = 'individual' and subject_id = p_individual_id;
   delete from media_links where subject_kind = 'individual' and subject_id = p_individual_id;
@@ -469,6 +518,50 @@ begin
 end;
 $$;
 grant execute on function delete_individual(uuid) to authenticated;
+
+-- État effectif des cadenas d'un arbre, direct ou hérité, pour l'affichage.
+-- direct = cadenas posé sur l'élément ; sinon reason explique la protection.
+create or replace function effective_locks(p_tree_id uuid)
+returns table(target_kind text, target_id uuid, direct boolean, reason text)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not exists (select 1 from trees where id = p_tree_id and owner_id = auth.uid())
+     and not exists (select 1 from tree_members where tree_id = p_tree_id and user_id = auth.uid()) then
+    raise exception 'Accès refusé.';
+  end if;
+
+  return query
+  select 'individual'::text, i.id, individual_direct_locked(i.id),
+         case when individual_direct_locked(i.id) then null::text
+              else 'conjoint cadenassé : ' || coalesce((
+                select trim(coalesce(s.first_names,'') || ' ' || coalesce(s.last_name,''))
+                from individuals s
+                where s.id = (select x from spouses_of(i.id) x where individual_direct_locked(x) limit 1)
+              ), 'un conjoint') end
+  from individuals i
+  where i.tree_id = p_tree_id and individual_locked(i.id);
+
+  return query
+  select 'event'::text, e.id, exists (select 1 from record_locks r
+                                      where r.target_kind = 'event' and r.target_id = e.id),
+         case when exists (select 1 from record_locks r
+                           where r.target_kind = 'event' and r.target_id = e.id) then null::text
+              when e.subject_kind = 'individual' then 'fiche cadenassée'
+              else 'conjoint cadenassé' end
+  from events e
+  where e.tree_id = p_tree_id and event_locked(e.id);
+
+  return query
+  select 'media'::text, m.id, exists (select 1 from record_locks r
+                                      where r.target_kind = 'media' and r.target_id = m.id),
+         case when exists (select 1 from record_locks r
+                           where r.target_kind = 'media' and r.target_id = m.id) then null::text
+              else 'lié à une fiche ou un événement cadenassé' end
+  from media m
+  where m.tree_id = p_tree_id and media_locked(m.id);
+end;
+$$;
+grant execute on function effective_locks(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 10. NOTIFICATIONS : nouveaux types
