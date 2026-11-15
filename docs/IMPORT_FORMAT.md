@@ -96,7 +96,7 @@ Règle pour `date` + `datePrecision` : toujours remplir `date` avec la
 meilleure estimation ponctuelle, et qualifier via `datePrecision` —
 exactement la convention déjà utilisée par le site :
 - Date lisible intégralement sur l'acte → `"exact"`
-- "vers 1850" / année seule déduite → `date: "1850-01-01"`, `"about"`
+- "vers 1850" / année seule → `date: "1850"`, `"about"` (ou `"1850-03"` pour mois + année) ; jamais `1850-01-01`, qui se lirait comme un vrai 1er janvier
 - Antérieur/postérieur à une date connue → `"before"` / `"after"`
 - Rien de fiable → `date: null`, `"unknown"`
 

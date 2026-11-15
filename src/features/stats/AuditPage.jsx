@@ -8,6 +8,7 @@ import Meter from './charts/Meter.jsx';
 import MergeDuplicateDialog from './MergeDuplicateDialog.jsx';
 import SuggestionsPanel from './SuggestionsPanel.jsx';
 import { cleanupTreeEventDuplicates } from './cleanupDuplicates.js';
+import { countJanuaryFirstDates, fixJanuaryFirstDates } from './januaryFirstDates.js';
 import AuditResolver from './AuditResolver.jsx';
 import { pushToast } from '../../store/useToastStore.js';
 import { mergeIdenticalFindings } from './auditCorrections.js';
@@ -62,6 +63,7 @@ export default function AuditPage() {
   const [mergeCandidate, setMergeCandidate] = useState(null); // { aId, bId } | null
   const [cleanup, setCleanup] = useState({ running: false, result: null, error: null });
   const [openFindingId, setOpenFindingId] = useState(null);
+  const [janFirst, setJanFirst] = useState({ count: 0, armed: false, running: false, done: null, error: null });
   const [bulkMerge, setBulkMerge] = useState({ running: false, done: 0, error: null });
   const role = useAuthStore((s) => s.role);
   const canEdit = role === 'admin' || role === 'family';
@@ -138,6 +140,24 @@ export default function AuditPage() {
     reload();
   }
 
+  useEffect(() => {
+    if (!currentTreeId) return;
+    countJanuaryFirstDates(currentTreeId).then((count) => setJanFirst((s) => ({ ...s, count }))).catch(() => {});
+  }, [currentTreeId]);
+
+  // Deux clics (armer puis confirmer), comme les autres corrections en masse.
+  async function handleJanFirst() {
+    if (!janFirst.armed) { setJanFirst((s) => ({ ...s, armed: true })); return; }
+    setJanFirst((s) => ({ ...s, running: true, error: null }));
+    try {
+      const done = await fixJanuaryFirstDates(currentTreeId);
+      setJanFirst({ count: 0, armed: false, running: false, done, error: null });
+      reload();
+    } catch (err) {
+      setJanFirst((s) => ({ ...s, armed: false, running: false, error: err.message || 'La correction a échoué.' }));
+    }
+  }
+
   async function handleCleanupDuplicates() {
     if (!currentTreeId) return;
     setCleanup({ running: true, result: null, error: null });
@@ -186,6 +206,25 @@ export default function AuditPage() {
         )}
         {cleanup.error && <span className="text-xs text-red-500">{cleanup.error}</span>}
       </div>
+
+      {canEdit && (janFirst.count > 0 || janFirst.done != null) && (
+        <div className="mb-6 rounded-lg border border-neutral-200 p-3 text-xs dark:border-neutral-800">
+          {janFirst.done != null ? (
+            <span className="text-emerald-600">{janFirst.done} date(s) repassée(s) en « vers l'année ».</span>
+          ) : (
+            <>
+              <p className="mb-2 text-neutral-600 dark:text-neutral-300">
+                {janFirst.count} date(s) sont enregistrées au 1er janvier « exact » sans aucune preuve : ce sont très probablement des années seules. Les passer en « vers » les affichera sous la forme « vers 1829 ». Les 1er janvier appuyés par un acte ne sont pas touchés.
+              </p>
+              <button onClick={handleJanFirst} disabled={janFirst.running} className={`rounded-lg px-3 py-1.5 font-medium text-white disabled:opacity-50 ${janFirst.armed ? 'bg-red-600' : 'bg-accent-600'}`}>
+                {janFirst.running ? 'Correction en cours…' : janFirst.armed ? `Confirmer : passer ${janFirst.count} date(s) en « vers »` : 'Afficher ces dates en année seule'}
+              </button>
+              {janFirst.armed && !janFirst.running && <button onClick={() => setJanFirst((s) => ({ ...s, armed: false }))} className="ml-2 underline">Annuler</button>}
+              {janFirst.error && <span className="ml-2 text-red-500">{janFirst.error}</span>}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Constats au total" value={findings.length} />

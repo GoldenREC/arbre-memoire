@@ -54,7 +54,7 @@ describe('parseGedcomDate', () => {
     expect(parseGedcomDate('ABT 1902')).toMatchObject({ date: '1902-01-01', datePrecision: 'about' });
   });
   it('gère une année seule', () => {
-    expect(parseGedcomDate('1925')).toMatchObject({ date: '1925-01-01', datePrecision: 'exact' });
+    expect(parseGedcomDate('1925')).toMatchObject({ date: '1925-01-01', datePrecision: 'about' });
   });
 });
 

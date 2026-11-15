@@ -169,7 +169,7 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <BlockField label="Date de naissance">
-              <DatePartsInput value={form.birthDate} onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))} disabled={loadingPlaces} />
+              <DatePartsInput value={form.birthDate} onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))} disabled={loadingPlaces} precision={form.birthDatePrecision} onPrecisionChange={(v) => setForm((f) => ({ ...f, birthDatePrecision: v }))} />
             </BlockField>
             <Field label="Précision (naissance)">
               <select className="field" value={form.birthDatePrecision} onChange={set(setForm, 'birthDatePrecision')}>
@@ -202,7 +202,7 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <BlockField label="Date de décès">
-                  <DatePartsInput value={form.deathDate} onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))} disabled={loadingPlaces} />
+                  <DatePartsInput value={form.deathDate} onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))} disabled={loadingPlaces} precision={form.deathDatePrecision} onPrecisionChange={(v) => setForm((f) => ({ ...f, deathDatePrecision: v }))} />
                 </BlockField>
                 <Field label="Précision (décès)">
                   <select className="field" value={form.deathDatePrecision} onChange={set(setForm, 'deathDatePrecision')}>

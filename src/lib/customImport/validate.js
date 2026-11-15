@@ -1,3 +1,4 @@
+import { normalizeImportDates } from './normalizeDates.js';
 /**
  * Validation du fichier d'import personnalisé (docs/IMPORT_FORMAT.md) —
  * en amont du mapping vers le modèle de staging (mapper.js). Fonction
@@ -87,6 +88,8 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
   if (!isPlainObject(model)) {
     return ['Le fichier ne contient pas un objet JSON valide.'];
   }
+  // "1829" et "1829-03" sont admis : ramenés ici au format stocké, avant tout contrôle.
+  normalizeImportDates(model);
   if (!Array.isArray(model.individuals) || model.individuals.length === 0) {
     errors.push('"individuals" est obligatoire et doit contenir au moins une personne.');
     return errors; // inutile d'aller plus loin sans individus

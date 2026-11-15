@@ -68,7 +68,7 @@ export default function EventQuickEditPanel({ treeId, event, onSaved, onClose })
 
       <span className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-300">Date</span>
       <div className="grid grid-cols-1 gap-2">
-        <DatePartsInput value={date} onChange={setDate} />
+        <DatePartsInput value={date} onChange={setDate} precision={datePrecision} onPrecisionChange={setDatePrecision} />
         <select className="field" value={datePrecision} onChange={(e) => setDatePrecision(e.target.value)}>
           {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>

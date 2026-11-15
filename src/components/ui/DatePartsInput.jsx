@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { yearOptions, daysInMonth, partsToIsoDate, isoDateToParts, MONTH_LABELS } from '../../lib/utils/dateParts.js';
+import { yearOptions, daysInMonth, partsToPartialIsoDate, isoDateToPartsFor, MONTH_LABELS } from '../../lib/utils/dateParts.js';
 
 /**
  * Sélecteur de date en 3 listes liées (jour / mois / année) : rend
@@ -23,19 +23,33 @@ import { yearOptions, daysInMonth, partsToIsoDate, isoDateToParts, MONTH_LABELS 
  * du formulaire, changement de fiche) — jamais après notre propre
  * onChange, y compris quand celui-ci efface un jour devenu invalide
  * après un changement de mois/année (ce qui renvoie aussi null).
+ *
+ * Date partielle : l'année seule (ou le mois et l'année) suffit. Elle
+ * est émise au 1er janvier (ou au 1er du mois) et, si `precision` et
+ * `onPrecisionChange` sont fournis, la précision passe d'elle-même à
+ * "Vers" — c'est elle qui indique que le jour n'est pas connu (voir
+ * dateParts.js). Elle revient à sa valeur d'origine si la date est
+ * ensuite complétée.
  */
-export default function DatePartsInput({ value, onChange, disabled = false }) {
-  const [parts, setParts] = useState(() => isoDateToParts(value));
+export default function DatePartsInput({ value, onChange, disabled = false, precision, onPrecisionChange }) {
+  const [parts, setParts] = useState(() => isoDateToPartsFor(value, precision));
+  const autoSwitchedFromRef = useRef(null);
   const lastEmittedRef = useRef(value ?? null);
 
   useEffect(() => {
     const incoming = value ?? null;
     if (incoming !== lastEmittedRef.current) {
       lastEmittedRef.current = incoming;
-      setParts(isoDateToParts(incoming));
+      setParts(isoDateToPartsFor(incoming, precision));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
+
+  // "Exacte" choisie sur une année seule : la date devient le 1er janvier, on l'affiche tel quel.
+  useEffect(() => {
+    if (value) setParts(isoDateToPartsFor(value, precision));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [precision]);
 
   const years = yearOptions();
   const maxDay = daysInMonth(Number(parts.year) || null, Number(parts.month) || null);
@@ -48,9 +62,17 @@ export default function DatePartsInput({ value, onChange, disabled = false }) {
     // plutôt que laissé sur une valeur désormais invalide.
     if (next.day && Number(next.day) > max) next.day = '';
     setParts(next);
-    const iso = partsToIsoDate(next);
+    const { iso, partial } = partsToPartialIsoDate(next);
     lastEmittedRef.current = iso;
     onChange(iso);
+    if (!onPrecisionChange) return;
+    if (partial && (!precision || precision === 'exact' || precision === 'unknown')) {
+      autoSwitchedFromRef.current = precision || 'unknown';
+      onPrecisionChange('about');
+    } else if (!partial && iso && autoSwitchedFromRef.current && precision === 'about') {
+      onPrecisionChange(autoSwitchedFromRef.current);
+      autoSwitchedFromRef.current = null;
+    }
   }
 
   return (

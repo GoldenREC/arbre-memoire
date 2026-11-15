@@ -2,10 +2,24 @@
  * Formatage de dates "généalogiques" : une date peut être exacte,
  * approximative, avant/après une borne, ou totalement inconnue.
  */
+import { partialKind } from './dateParts.js';
+
+const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+/** Année seule ou "mois année" pour une date partielle (voir dateParts.js), sinon null. */
+function formatPartial(isoDate, datePrecision, numeric) {
+  const kind = partialKind(isoDate, datePrecision);
+  if (!kind) return null;
+  const [year, month] = isoDate.split('-');
+  if (kind === 'year') return year;
+  if (numeric) return numeric === 'ymd' ? `${year}-${month}` : `${month}/${year}`;
+  return `${MONTHS_LONG[parseInt(month, 10) - 1]} ${year}`;
+}
+
 export function formatGenealogyDate({ date, datePrecision, dateEnd } = {}) {
   if (!date && datePrecision !== 'between') return '?';
 
-  const formatted = date ? formatDateFr(date) : '?';
+  const formatted = date ? formatPartial(date, datePrecision, false) || formatDateFr(date) : '?';
 
   switch (datePrecision) {
     case 'about':
@@ -15,7 +29,7 @@ export function formatGenealogyDate({ date, datePrecision, dateEnd } = {}) {
     case 'after':
       return `après ${formatted}`;
     case 'between':
-      return `entre ${formatted} et ${dateEnd ? formatDateFr(dateEnd) : '?'}`;
+      return `entre ${formatted} et ${dateEnd ? formatPartial(dateEnd, datePrecision, false) || formatDateFr(dateEnd) : '?'}`;
     case 'exact':
       return formatted;
     default:
@@ -48,7 +62,7 @@ function formatDateNumeric(isoDate, dateFormat) {
  */
 export function formatGenealogyDateWithPref({ date, datePrecision, dateEnd } = {}, dateFormat = 'dmy') {
   if (!date && datePrecision !== 'between') return '?';
-  const formatted = date ? formatDateNumeric(date, dateFormat) : '?';
+  const formatted = date ? formatPartial(date, datePrecision, dateFormat || 'dmy') || formatDateNumeric(date, dateFormat) : '?';
 
   switch (datePrecision) {
     case 'about':
@@ -58,7 +72,7 @@ export function formatGenealogyDateWithPref({ date, datePrecision, dateEnd } = {
     case 'after':
       return `après ${formatted}`;
     case 'between':
-      return `entre ${formatted} et ${dateEnd ? formatDateNumeric(dateEnd, dateFormat) : '?'}`;
+      return `entre ${formatted} et ${dateEnd ? formatPartial(dateEnd, datePrecision, dateFormat || 'dmy') || formatDateNumeric(dateEnd, dateFormat) : '?'}`;
     default:
       return formatted;
   }

@@ -141,7 +141,7 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Date de naissance">
-          <DatePartsInput value={form.birthDate} onChange={(v) => patch({ birthDate: v })} />
+          <DatePartsInput value={form.birthDate} onChange={(v) => patch({ birthDate: v })} precision={form.birthDatePrecision} onPrecisionChange={(v) => patch({ birthDatePrecision: v })} />
         </Field>
         <Field label="Précision (naissance)">
           <select className="field" value={form.birthDatePrecision} onChange={(e) => patch({ birthDatePrecision: e.target.value })}>
@@ -170,7 +170,7 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Date de décès">
-              <DatePartsInput value={form.deathDate} onChange={(v) => patch({ deathDate: v })} />
+              <DatePartsInput value={form.deathDate} onChange={(v) => patch({ deathDate: v })} precision={form.deathDatePrecision} onPrecisionChange={(v) => patch({ deathDatePrecision: v })} />
             </Field>
             <Field label="Précision (décès)">
               <select className="field" value={form.deathDatePrecision} onChange={(e) => patch({ deathDatePrecision: e.target.value })}>

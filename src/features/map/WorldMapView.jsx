@@ -12,6 +12,7 @@ import { fetchMapEvents, fetchPlacesWithStatus, buildIndividualPath, EVENT_FILTE
 import { MAP_CATEGORIES, categoryOf, pathColorAt } from './eventTypeStyles.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass, proofLevelHex } from '../../lib/utils/proofLevel.js';
 import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
+import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import TimeRangeSlider from './TimeRangeSlider.jsx';
 import PlacesResolverPanel from './PlacesResolverPanel.jsx';
 import EventQuickEditPanel from './EventQuickEditPanel.jsx';
@@ -249,7 +250,7 @@ export default function WorldMapView() {
                         <div className="min-w-[180px] text-xs">
                           <div className="mb-1 font-semibold">{e.label || EVENT_TYPE_LABELS[e.eventType] || e.eventType}</div>
                           <div className="text-neutral-500">{e.placeLabel}</div>
-                          {e.date && <div className="text-neutral-500">{e.date}</div>}
+                          {e.date && <div className="text-neutral-500">{formatGenealogyDate({ date: e.date, datePrecision: e.datePrecision })}</div>}
                           <ul className="mt-1 space-y-0.5">
                             {e.people.map((p) => <li key={p.id}><Link to={`/individus/${p.id}`} title="Ouvrir la fiche">{p.name}</Link></li>)}
                           </ul>

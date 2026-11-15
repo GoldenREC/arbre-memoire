@@ -151,7 +151,7 @@ function Milestone({ label, value, onChange, loadingPlaces, hasProof, proofRequi
     <div className="space-y-1.5 rounded-md border border-neutral-100 p-2 dark:border-neutral-800">
       <span className="block text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <DatePartsInput value={value.date} onChange={(v) => onChange((s) => ({ ...s, date: v }))} disabled={loadingPlaces} />
+        <DatePartsInput value={value.date} onChange={(v) => onChange((s) => ({ ...s, date: v }))} disabled={loadingPlaces} precision={value.datePrecision} onPrecisionChange={(v) => onChange((s) => ({ ...s, datePrecision: v }))} />
         <select className="field" value={value.datePrecision} onChange={(e) => onChange((s) => ({ ...s, datePrecision: e.target.value }))}>
           {PRECISION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>

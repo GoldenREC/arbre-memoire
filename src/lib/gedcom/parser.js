@@ -188,7 +188,9 @@ export function parseGedcomDate(raw) {
   const parsed = parseSimpleDate(trimmed);
   return {
     date: parsed,
-    datePrecision: parsed ? 'exact' : 'unknown',
+    // Année seule ou mois + année : le jour n'est pas connu, donc pas "exacte"
+    // (sinon la date s'afficherait comme un vrai 1er janvier).
+    datePrecision: parsed ? (raw.trim().split(/\s+/).length >= 3 ? 'exact' : 'about') : 'unknown',
     raw,
   };
 }
