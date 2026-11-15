@@ -9,6 +9,7 @@ import { createIndividualFull, addParentLink, linkAsSibling } from './individual
 import { attachDateProof } from './actsMutations.js';
 import { pushErrorToast, pushToast } from '../../store/useToastStore.js';
 import { bornMoreThanYearsAgo, effectiveDeceased } from '../../lib/utils/deceasedRule.js';
+import { isPlaceEmpty } from '../../lib/utils/placeLabel.js';
 
 const RELATION_LABELS = (sex) => ({
   father: 'Père',
@@ -71,20 +72,21 @@ export default function IndividualCreateForm({ treeId, onCreated, onCancel }) {
     };
   }
 
-  const birthProofRequired = !!form.birthDate && form.birthDatePrecision === 'exact';
+  // Preuve exigée dès qu'une information de naissance (date ou lieu) est saisie.
+  const birthProofRequired = !!form.birthDate || !isPlaceEmpty(form.birthPlace);
   // Règle des 130 ans : une naissance trop ancienne impose « décédé ».
   const forcedDeceased = bornMoreThanYearsAgo(form.birthDate);
   const isDeceased = effectiveDeceased(form.isDeceased, form.birthDate);
-  const deathProofRequired = isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact';
+  const deathProofRequired = isDeceased && (!!form.deathDate || !isPlaceEmpty(form.deathPlace));
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (birthProofRequired && !isDateProofValid(form.birthProof)) {
-      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de naissance exacte.');
+      pushErrorToast('Une preuve (acte, mention marginale ou information familiale) est requise pour la naissance.');
       return;
     }
     if (deathProofRequired && !isDateProofValid(form.deathProof)) {
-      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de décès exacte.');
+      pushErrorToast('Une preuve (acte, mention marginale ou information familiale) est requise pour le décès.');
       return;
     }
     setSaving(true);

@@ -12,6 +12,8 @@ import { countJanuaryFirstDates, fixJanuaryFirstDates } from './januaryFirstDate
 import AuditResolver from './AuditResolver.jsx';
 import { pushToast } from '../../store/useToastStore.js';
 import { mergeIdenticalFindings } from './auditCorrections.js';
+import { planRuleAudit, RULE_KIND_LABELS } from './ruleAudit.js';
+import { fixDeceased130 } from './ruleAuditFixes.js';
 
 const KIND_LABELS = {
   death_before_birth: 'Décès avant naissance',
@@ -65,6 +67,7 @@ export default function AuditPage() {
   const [openFindingId, setOpenFindingId] = useState(null);
   const [janFirst, setJanFirst] = useState({ count: 0, armed: false, running: false, done: null, error: null });
   const [bulkMerge, setBulkMerge] = useState({ running: false, done: 0, error: null });
+  const [ruleFix, setRuleFix] = useState({ armed: false, running: false, done: null, error: null });
   const role = useAuthStore((s) => s.role);
   const canEdit = role === 'admin';
 
@@ -87,6 +90,33 @@ export default function AuditPage() {
     const { individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById } = state.bundle;
     return runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById });
   }, [state.bundle]);
+
+  // Règles actuelles (130 ans, preuves naissance/décès/union) appliquées aux données existantes.
+  const ruleFindings = useMemo(() => {
+    if (!state.bundle) return [];
+    const { individuals, events, citations, partnersByUnion } = state.bundle;
+    return planRuleAudit({ individuals, events, citations, partnersByUnion });
+  }, [state.bundle]);
+
+  const ruleGroups = useMemo(() => {
+    const groups = {};
+    for (const f of ruleFindings) (groups[f.kind] ||= []).push(f);
+    return groups;
+  }, [ruleFindings]);
+
+  const deceasedFixIds = useMemo(() => (ruleGroups.deceased_130 || []).flatMap((f) => f.individualIds), [ruleGroups]);
+
+  async function handleDeceasedFix() {
+    if (!ruleFix.armed) { setRuleFix((s) => ({ ...s, armed: true })); return; }
+    setRuleFix((s) => ({ ...s, running: true, error: null }));
+    try {
+      const done = await fixDeceased130(deceasedFixIds);
+      setRuleFix({ armed: false, running: false, done, error: null });
+      reload();
+    } catch (err) {
+      setRuleFix((s) => ({ ...s, armed: false, running: false, error: err.message || 'La correction a échoué.' }));
+    }
+  }
 
   const nmdByIndividual = useMemo(() => (state.bundle ? bulkNmdStatus(state.bundle) : null), [state.bundle]);
 
@@ -223,6 +253,50 @@ export default function AuditPage() {
               {janFirst.error && <span className="ml-2 text-red-500">{janFirst.error}</span>}
             </>
           )}
+        </div>
+      )}
+
+      {ruleFindings.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-200 p-4 dark:border-amber-900/50">
+          <h2 className="mb-1 text-sm font-semibold text-neutral-800 dark:text-neutral-100">Données qui ne respectent plus les règles</h2>
+          <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
+            Ces données ont été saisies avant les règles actuelles. Les corrections proposées sont sûres ; pour les preuves, il faut ajouter la source sur la fiche.
+          </p>
+
+          {ruleGroups.deceased_130 && (
+            <div className="mb-4 text-xs">
+              <p className="mb-2 font-medium text-neutral-700 dark:text-neutral-200">
+                {RULE_KIND_LABELS.deceased_130} — {ruleGroups.deceased_130.length} fiche(s)
+              </p>
+              {ruleFix.done != null ? (
+                <span className="text-emerald-600">{ruleFix.done} fiche(s) passée(s) en « décédé(e) ».</span>
+              ) : (
+                <>
+                  <button onClick={handleDeceasedFix} disabled={ruleFix.running} className={`rounded-lg px-3 py-1.5 font-medium text-white disabled:opacity-50 ${ruleFix.armed ? 'bg-red-600' : 'bg-accent-600'}`}>
+                    {ruleFix.running ? 'Correction en cours…' : ruleFix.armed ? `Confirmer : marquer ${deceasedFixIds.length} fiche(s) décédée(s)` : 'Corriger : marquer décédé(e)'}
+                  </button>
+                  {ruleFix.armed && !ruleFix.running && <button onClick={() => setRuleFix((s) => ({ ...s, armed: false }))} className="ml-2 underline">Annuler</button>}
+                  {ruleFix.error && <span className="ml-2 text-red-500">{ruleFix.error}</span>}
+                </>
+              )}
+            </div>
+          )}
+
+          {['proof_birth', 'proof_death', 'proof_union'].map((kind) => ruleGroups[kind] && (
+            <div key={kind} className="mb-3 text-xs">
+              <p className="mb-1 font-medium text-neutral-700 dark:text-neutral-200">
+                {RULE_KIND_LABELS[kind]} — {ruleGroups[kind].length} constat(s)
+              </p>
+              <ul className="space-y-1">
+                {ruleGroups[kind].map((f) => (
+                  <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 text-neutral-600 dark:text-neutral-300">
+                    <span>{f.message}</span>
+                    {f.link && canEdit && <Link to={f.link} className="text-accent-600 underline">Ajouter la preuve</Link>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
 

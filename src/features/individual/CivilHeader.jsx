@@ -40,11 +40,14 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
   const deathEvent = (events || []).find((e) => e.origin === 'individual' && e.eventType === 'death') || null;
   const hasBirthProof = !!birthEvent && (citations || []).some((c) => c.eventId === birthEvent.id);
   const hasDeathProof = !!deathEvent && (citations || []).some((c) => c.eventId === deathEvent.id);
-  const birthProofRequired = !!form.birthDate && form.birthDatePrecision === 'exact' && !hasBirthProof;
+  // Preuve exigée dès qu'une information de naissance (date ou lieu) est saisie.
+  const birthHasInfo = !!form.birthDate || !isPlaceEmpty(form.birthPlace) || !!form.birthPlaceLegacyLabel;
+  const birthProofRequired = birthHasInfo && !hasBirthProof;
   // Règle des 130 ans : une naissance trop ancienne impose « décédé ».
   const forcedDeceased = bornMoreThanYearsAgo(form.birthDate);
   const isDeceased = effectiveDeceased(form.isDeceased, form.birthDate);
-  const deathProofRequired = isDeceased && !!form.deathDate && form.deathDatePrecision === 'exact' && !hasDeathProof;
+  const deathHasInfo = !!form.deathDate || !isPlaceEmpty(form.deathPlace) || !!form.deathPlaceLegacyLabel;
+  const deathProofRequired = isDeceased && deathHasInfo && !hasDeathProof;
 
   /**
    * Les lieux structurés (les 9 champs) ne sont chargés qu'à l'ouverture
@@ -72,11 +75,11 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
 
   async function handleSave() {
     if (birthProofRequired && !isDateProofValid(form.birthProof)) {
-      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de naissance exacte.');
+      pushErrorToast('Une preuve (acte, mention marginale ou information familiale) est requise pour la naissance.');
       return;
     }
     if (deathProofRequired && !isDateProofValid(form.deathProof)) {
-      pushErrorToast('Une preuve (acte ou information familiale) est requise pour une date de décès exacte.');
+      pushErrorToast('Une preuve (acte, mention marginale ou information familiale) est requise pour le décès.');
       return;
     }
     setSaving(true);

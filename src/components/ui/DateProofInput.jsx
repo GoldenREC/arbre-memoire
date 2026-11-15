@@ -1,5 +1,5 @@
 /**
- * Sélecteur de preuve pour une date exacte (naissance/décès) : "Acte"
+ * Sélecteur de preuve pour les groupes naissance/décès (date ou lieu) : "Acte"
  * (état civil/paroissial/notarié — exige un fichier scanné OU un
  * permalien d'archives) ou "Informations familiales" (aucune pièce
  * jointe requise). Utilisé par IndividualCreateForm et CivilHeader
@@ -25,7 +25,7 @@ export function isDateProofValid(value) {
   return false;
 }
 
-export default function DateProofInput({ value, onChange, disabled = false, allowMarginal = false, message = 'Date exacte : une preuve est requise.' }) {
+export default function DateProofInput({ value, onChange, disabled = false, allowMarginal = false, message = 'Une preuve est requise pour cette information.' }) {
   const v = value || EMPTY_DATE_PROOF;
   // Nom de groupe unique : plusieurs sélecteurs peuvent coexister dans un
   // même formulaire (naissance + décès, ou les trois jalons d'une union).
