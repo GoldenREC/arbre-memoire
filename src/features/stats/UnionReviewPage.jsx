@@ -32,7 +32,7 @@ const STATUS_BADGE = {
 export default function UnionReviewPage() {
   const currentTreeId = useAuthStore((s) => s.currentTreeId);
   const role = useAuthStore((s) => s.role);
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
 
   const [state, setState] = useState({ loading: true, error: null, bundle: null });
   const [filter, setFilter] = useState('suspect');

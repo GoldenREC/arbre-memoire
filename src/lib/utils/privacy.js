@@ -35,9 +35,9 @@ export function maskIndividual(individual) {
   };
 }
 
-/** role: 'admin' | 'family' | 'guest' | null (non connecté) */
+/** role: 'admin' (propriétaire inclus) | 'guest' | null (non connecté) */
 export function canViewFullDetails(role) {
-  return role === 'admin' || role === 'family';
+  return role === 'admin';
 }
 
 export function applyPrivacyRules(individuals, role, thresholdYears = 100) {

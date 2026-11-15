@@ -1,12 +1,12 @@
 import ThemeToggle from './ThemeToggle.jsx';
 import NotificationBell from './NotificationBell.jsx';
 import { useAuthStore } from '../../store/useAuthStore.js';
-import { ROLE_LABELS } from '../../lib/db/invitations.js';
+import { memberRoleLabel } from '../../lib/db/invitations.js';
 
 export default function Topbar({ onMenuClick = () => {} }) {
-  const { user, role, signOut } = useAuthStore();
+  const { user, role, isOwner, signOut } = useAuthStore();
 
-  const roleLabel = ROLE_LABELS[role] || null;
+  const roleLabel = role ? memberRoleLabel(role, isOwner) : null;
 
   return (
     <header className="flex h-14 items-center justify-between gap-2 border-b border-neutral-200 bg-white px-3 sm:px-6 dark:border-neutral-800 dark:bg-neutral-950">

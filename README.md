@@ -107,6 +107,11 @@ npm install
      table des correspondances de toponymes historiques, pour la carte)
    - `supabase/settings.sql` (membres & invitations, préférences,
      notifications, seuil RGPD, historique des modifications)
+   - `supabase/multi_tree.sql` (plusieurs arbres par compte, rôles
+     propriétaire / admin / membre, transferts de propriété, cadenas,
+     suppression de fiche réservée au propriétaire)
+   - Optionnel, pour les e-mails de transfert : déployer la fonction
+     Edge `supabase/functions/send-transfer-mail` (voir plus bas)
 3. Dans **Project Settings → API**, récupère `Project URL` et la clé
    `anon public`.
 4. Copie `.env.example` en `.env.local` et renseigne ces deux valeurs :
@@ -286,13 +291,17 @@ lui-même.
 
 Menu **Paramètres** (dernière entrée de la navigation) :
 
-- **Membres** *(admin)* : invite par e-mail en choisissant un rôle
-  (Admin / Contributeur / Lecteur), copie le lien d'invitation
-  généré, suis les invitations en attente (révocables), et change le
-  rôle ou retire un membre déjà présent. Le lien ouvre
-  `/invite/:token`, accessible sans connexion préalable : la personne
-  invitée y crée son compte ou se connecte, puis rejoint l'arbre
-  automatiquement.
+- **Membres** *(admin)* : invite par e-mail (le propriétaire peut
+  inviter un admin ; un admin invite des membres). Trois rôles par
+  arbre : **Propriétaire** (un seul, il supprime fiches et arbre, pose
+  les cadenas, nomme ou rétrograde les admins, transfère l'arbre),
+  **Admin** (crée et modifie, ne supprime ni fiches ni arbre) et
+  **Membre** (consultation seule). Un admin peut passer lui-même en
+  membre après avoir tapé une phrase de confirmation. Le transfert de
+  propriété demande une phrase de confirmation et l'accord écrit du
+  destinataire ; rien ne change tant qu'il n'a pas répondu. Le lien
+  d'invitation ouvre `/invite/:token`, accessible sans connexion
+  préalable.
 - **Préférences** : langue de l'interface et langue des e-mails
   (indépendantes, 6 langues : français, anglais, italien, espagnol,
   allemand, portugais), format de date (JJ/MM/AAAA ou AAAA-MM-JJ),
@@ -371,3 +380,14 @@ les tests puis ne déploie que s'ils passent.
 Les fichiers `supabase/*.sql` s'exécutent à la main dans l'éditeur SQL
 de Supabase. Le dernier ajouté, `harden_search_path.sql`, est un
 durcissement facultatif.
+
+## Mails de transfert de propriété (fonction Edge, optionnel)
+
+Les demandes et réponses de transfert sont aussi envoyées par e-mail via
+la fonction `supabase/functions/send-transfer-mail` (Resend). Sans cette
+fonction, la notification dans l'application reste disponible.
+
+```bash
+supabase functions deploy send-transfer-mail
+supabase secrets set RESEND_API_KEY=re_xxx MAIL_FROM="Arbre & Mémoire <noreply@ton-domaine>"
+```

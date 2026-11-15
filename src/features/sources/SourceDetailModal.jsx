@@ -7,6 +7,7 @@ import { EVENT_TYPE_LABELS } from '../individual/EventForm.jsx';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
 import { SOURCE_TYPES, isUnreliableSourceUrl } from '../../lib/utils/sourceReliability.js';
 import ActViewer from './ActViewer.jsx';
+import LockToggle from '../../components/ui/LockToggle.jsx';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 import { refreshProofLevelsForSource } from '../../lib/db/proofLevelSync.js';
 
@@ -186,7 +187,7 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
             ) : (
               <div className="grid grid-cols-4 gap-2">
                 {media.map((m) => (
-                  <ActThumbnail key={m.id} media={m} onOpen={() => setViewing(m)} onDelete={canEdit ? () => handleDeleteMedia(m) : null} />
+                  <ActThumbnail key={m.id} media={m} treeId={treeId} onOpen={() => setViewing(m)} onDelete={canEdit ? () => handleDeleteMedia(m) : null} />
                 ))}
               </div>
             )}
@@ -234,7 +235,7 @@ export default function SourceDetailModal({ treeId, source, canEdit, onClose, on
   );
 }
 
-function ActThumbnail({ media, onOpen, onDelete }) {
+function ActThumbnail({ media, treeId, onOpen, onDelete }) {
   const [url, setUrl] = useState(null);
 
   useEffect(() => {
@@ -256,6 +257,9 @@ function ActThumbnail({ media, onOpen, onDelete }) {
           ✕
         </button>
       )}
+      <div className="absolute bottom-1 left-1 right-1 rounded bg-black/50 px-1 py-0.5 text-white">
+        <LockToggle treeId={treeId} kind="media" targetId={media.id} compact />
+      </div>
     </div>
   );
 }

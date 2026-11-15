@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import TreeSwitcher from './TreeSwitcher.jsx';
 
 function useSections() {
   const { t } = useTranslation();
@@ -89,6 +90,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
           >
             ✕
           </button>
+        </div>
+
+        <div className="pb-4">
+          <TreeSwitcher onNavigate={onClose} />
         </div>
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">

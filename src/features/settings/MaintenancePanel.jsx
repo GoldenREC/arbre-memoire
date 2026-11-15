@@ -28,7 +28,7 @@ function formatBytes(n) {
 /** Onglet Paramètres → Maintenance (Snapshot, fichiers orphelins, journal d'activité). Réservé aux administrateurs. */
 export default function MaintenancePanel() {
   const { t } = useTranslation();
-  const { currentTreeId, role, loadTrees } = useAuthStore();
+  const { currentTreeId, isOwner, loadTrees } = useAuthStore();
   const navigate = useNavigate();
 
   // --- Snapshot : sauvegarde ---
@@ -198,7 +198,12 @@ export default function MaintenancePanel() {
           <h3 className="mb-1 text-sm font-semibold">{t('settings.maintenance.restoreTitle')}</h3>
           <p className="mb-3 text-xs text-red-600">{t('settings.maintenance.restoreWarning')}</p>
           <input ref={fileInputRef} type="file" accept=".json,.zip" onChange={handleFileChosen} className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!isOwner}
+            title={isOwner ? undefined : 'Réservé au propriétaire'}
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+          >
             {t('settings.maintenance.restoreButton')}
           </button>
 
@@ -308,7 +313,7 @@ export default function MaintenancePanel() {
       </section>
 
       {/* Zone de danger */}
-      {role === 'admin' && (
+      {isOwner && (
         <section className="rounded-xl border border-red-200 p-4 dark:border-red-900">
           <h2 className="mb-1 text-sm font-semibold text-red-700 dark:text-red-400">{t('settings.maintenance.dangerZoneTitle')}</h2>
           <p className="mb-3 text-xs text-neutral-500">{t('settings.maintenance.deleteTreeHelp')}</p>

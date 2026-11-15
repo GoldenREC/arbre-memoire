@@ -15,7 +15,7 @@ import IndividualCreateForm from './IndividualCreateForm.jsx';
 export default function IndividualsList() {
   const { currentTreeId, role, privacyThresholdYears } = useAuthStore();
   const navigate = useNavigate();
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
   const [individuals, setIndividuals] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);

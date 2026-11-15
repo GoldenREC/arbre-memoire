@@ -5,6 +5,7 @@ import EventForm, { EVENT_TYPE_LABELS } from './EventForm.jsx';
 import { createEvent, updateEvent, deleteEvent } from './individualMutations.js';
 import { PROOF_LEVEL_LABELS, proofLevelBadgeClass } from '../../lib/utils/proofLevel.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
+import LockToggle from '../../components/ui/LockToggle.jsx';
 
 const EVENT_ICONS = {
   birth: '👶', death: '⚰️', union_start: '💑', marriage: '💍', divorce: '💔', engagement: '💞',
@@ -190,6 +191,11 @@ export default function Timeline({ individual, events, parents, childGroups, pla
                 >
                   Modifier
                 </button>
+              )}
+              {item.editable && item.raw?.id && (
+                <div className="mt-0.5">
+                  <LockToggle treeId={treeId} kind="event" targetId={item.raw.id} compact />
+                </div>
               )}
             </div>
           </li>

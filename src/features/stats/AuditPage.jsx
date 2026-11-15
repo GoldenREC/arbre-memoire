@@ -66,7 +66,7 @@ export default function AuditPage() {
   const [janFirst, setJanFirst] = useState({ count: 0, armed: false, running: false, done: null, error: null });
   const [bulkMerge, setBulkMerge] = useState({ running: false, done: 0, error: null });
   const role = useAuthStore((s) => s.role);
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
 
   const reload = useCallback(() => {
     if (!currentTreeId) return;

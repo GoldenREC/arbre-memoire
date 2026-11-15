@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotifications } from '../../hooks/useNotifications.js';
 
-const KIND_ICON = { new_act: '📜', new_photo: '🖼️', birthday: '🎂' };
+const KIND_ICON = { new_act: '📜', new_photo: '🖼️', birthday: '🎂', ownership_transfer: '🔁' };
 
 function timeAgo(iso) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -18,7 +18,11 @@ function timeAgo(iso) {
 /** Cloche de notifications de la barre supérieure — voir useNotifications.js. */
 export default function NotificationBell() {
   const user = useAuthStore((s) => s.user);
+  const trees = useAuthStore((s) => s.trees);
+  const currentTreeId = useAuthStore((s) => s.currentTreeId);
+  const setCurrentTreeId = useAuthStore((s) => s.setCurrentTreeId);
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications(user?.id);
+  const treeName = (id) => trees.find((t) => t.id === id)?.name || null;
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -43,9 +47,13 @@ export default function NotificationBell() {
     return () => window.removeEventListener('keydown', handleShortcut);
   }, []);
 
+  // Les alertes concernent tous les arbres : on bascule d'abord sur l'arbre concerné.
   async function handleClick(n) {
     if (!n.read_at) await markRead(n.id);
     setOpen(false);
+    if (n.tree_id && n.tree_id !== currentTreeId && trees.some((t) => t.id === n.tree_id)) {
+      await setCurrentTreeId(n.tree_id);
+    }
     if (n.link) navigate(n.link);
   }
 
@@ -90,7 +98,10 @@ export default function NotificationBell() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-neutral-800 dark:text-neutral-100">{n.title}</span>
                     {n.body && <span className="block truncate text-xs text-neutral-500 dark:text-neutral-400">{n.body}</span>}
-                    <span className="block text-[11px] text-neutral-400">{timeAgo(n.created_at)}</span>
+                    <span className="block text-[11px] text-neutral-400">
+                      {treeName(n.tree_id) && <span className="mr-1.5 font-medium text-accent-700 dark:text-accent-300">{treeName(n.tree_id)}</span>}
+                      {timeAgo(n.created_at)}
+                    </span>
                   </span>
                   {!n.read_at && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-accent-500" />}
                 </button>

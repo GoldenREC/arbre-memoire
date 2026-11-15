@@ -1,16 +1,40 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabaseClient.js';
-import { fetchMyTrees, createFirstTree } from '../lib/db/bootstrapTree.js';
+import { fetchMyTrees, createTree, createFirstTree } from '../lib/db/bootstrapTree.js';
+import { clearStagingArea } from '../lib/db/localDb.js';
+
+const CURRENT_TREE_KEY = 'am-current-tree-id';
+
+function readSavedTreeId() {
+  try { return window.localStorage.getItem(CURRENT_TREE_KEY); } catch { return null; }
+}
+function saveTreeId(treeId) {
+  try {
+    if (treeId) window.localStorage.setItem(CURRENT_TREE_KEY, treeId);
+    else window.localStorage.removeItem(CURRENT_TREE_KEY);
+  } catch { /* stockage indisponible : le choix ne sera pas mémorisé */ }
+}
+
+/** Champs dérivés de l'arbre courant (rôle, propriété, préférences, seuil RGPD). */
+function currentFields(tree) {
+  return {
+    role: tree?.role ?? null,
+    isOwner: !!tree?.isOwner,
+    preferences: tree?.preferences ?? null,
+    privacyThresholdYears: tree?.privacyThresholdYears ?? 100,
+  };
+}
 
 /**
- * État d'authentification + rôle de l'utilisateur sur l'arbre courant.
- * role vaut 'admin' | 'family' | 'guest' | null (non connecté).
- * preferences / privacyThresholdYears concernent toujours l'arbre
- * courant (currentTreeId) — voir features/settings/.
+ * État d'authentification + arbre courant. role vaut 'admin' | 'guest' |
+ * null (non connecté) ; isOwner est vrai pour le propriétaire de l'arbre
+ * courant (il est aussi 'admin'). Le choix de l'arbre est mémorisé dans le
+ * navigateur. Voir supabase/multi_tree.sql pour les règles réelles.
  */
 export const useAuthStore = create((set, get) => ({
   user: null,
   role: null,
+  isOwner: false,
   currentTreeId: null,
   trees: [],
   preferences: null,
@@ -29,13 +53,14 @@ export const useAuthStore = create((set, get) => ({
       if (newSession?.user) {
         get().loadTrees();
       } else {
-        set({ role: null, currentTreeId: null, trees: [], preferences: null, privacyThresholdYears: 100 });
+        set({ role: null, isOwner: false, currentTreeId: null, trees: [], preferences: null, privacyThresholdYears: 100 });
       }
     });
   },
 
   loadTrees: async () => {
-    let trees = await fetchMyTrees();
+    const userId = get().user?.id;
+    let trees = await fetchMyTrees(userId);
     // Sur la page d'acceptation d'une invitation, un compte tout juste
     // créé n'a encore AUCUNE adhésion au moment où ce listener se
     // déclenche (l'appel à accept_invitation() arrive juste après) :
@@ -45,26 +70,37 @@ export const useAuthStore = create((set, get) => ({
     const onInvitePage = typeof window !== 'undefined' && window.location.pathname.startsWith('/invite/');
     if (trees.length === 0 && !onInvitePage) {
       await createFirstTree('Mon arbre');
-      trees = await fetchMyTrees();
+      trees = await fetchMyTrees(userId);
     }
-    const current = trees[0];
-    set({
-      trees,
-      currentTreeId: current?.id ?? null,
-      role: current?.role ?? null,
-      preferences: current?.preferences ?? null,
-      privacyThresholdYears: current?.privacyThresholdYears ?? 100,
-    });
+    // On reprend l'arbre mémorisé s'il existe encore, sinon le premier.
+    const saved = readSavedTreeId();
+    const current = trees.find((t) => t.id === saved) ?? trees[0];
+    saveTreeId(current?.id ?? null);
+    set({ trees, currentTreeId: current?.id ?? null, ...currentFields(current) });
   },
 
-  setCurrentTreeId: (treeId) => {
+  /** Change d'arbre. Les données en attente d'import (IndexedDB) sont vidées : elles appartenaient à l'ancien arbre. */
+  setCurrentTreeId: async (treeId) => {
     const tree = get().trees.find((t) => t.id === treeId);
-    set({
-      currentTreeId: treeId,
-      role: tree?.role ?? null,
-      preferences: tree?.preferences ?? null,
-      privacyThresholdYears: tree?.privacyThresholdYears ?? 100,
-    });
+    if (!tree) return;
+    if (treeId !== get().currentTreeId) {
+      await clearStagingArea().catch(() => {});
+    }
+    saveTreeId(treeId);
+    set({ currentTreeId: treeId, ...currentFields(tree) });
+  },
+
+  /** Crée un arbre, puis bascule dessus. Renvoie son identifiant. */
+  createTree: async (name) => {
+    const newId = await createTree(name.trim());
+    await get().loadTrees();
+    await get().setCurrentTreeId(newId);
+    return newId;
+  },
+
+  /** Renomme l'arbre courant dans la liste locale (la base est écrite par l'appelant). */
+  renameLocalTree: (treeId, name) => {
+    set((s) => ({ trees: s.trees.map((t) => (t.id === treeId ? { ...t, name } : t)) }));
   },
 
   /** Fusionne un patch de préférences localement (après écriture réussie en base — voir settingsMutations.js). */
@@ -87,6 +123,7 @@ export const useAuthStore = create((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ user: null, role: null, currentTreeId: null, trees: [], preferences: null, privacyThresholdYears: 100 });
+    saveTreeId(null);
+    set({ user: null, role: null, isOwner: false, currentTreeId: null, trees: [], preferences: null, privacyThresholdYears: 100 });
   },
 }));

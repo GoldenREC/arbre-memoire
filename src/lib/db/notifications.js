@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient.js';
 export async function listNotifications(limit = 30) {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, kind, title, body, individual_id, link, read_at, created_at')
+    .select('id, tree_id, kind, title, body, individual_id, link, read_at, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;

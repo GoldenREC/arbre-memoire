@@ -8,12 +8,7 @@ import { supabase } from '../supabaseClient.js';
  * projet (voir bootstrapTree.js).
  */
 
-export const ROLE_LABELS = { admin: 'Admin', family: 'Contributeur', guest: 'Lecteur' };
-export const ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin', description: 'Contrôle total : membres, paramètres, toutes les fiches.' },
-  { value: 'family', label: 'Contributeur', description: 'Peut ajouter et modifier les fiches.' },
-  { value: 'guest', label: 'Lecteur', description: 'Consultation uniquement.' },
-];
+export { ROLE_LABELS, ROLE_OPTIONS, invitableRoles, memberRoleLabel } from '../utils/ownershipRules.js';
 
 /** Membres actuels de l'arbre, avec leur e-mail (via profiles) et leur rôle. */
 export async function listTreeMembers(treeId) {

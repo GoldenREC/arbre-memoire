@@ -11,7 +11,7 @@ import PetDetailModal from './PetDetailModal.jsx';
  */
 export default function PetsManager() {
   const { currentTreeId, role } = useAuthStore();
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
   const [pets, setPets] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);

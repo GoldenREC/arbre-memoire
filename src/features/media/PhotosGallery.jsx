@@ -16,7 +16,7 @@ import { yearOfPhoto, filterPhotosByYearRange } from './photoUtils.js';
  */
 export default function PhotosGallery() {
   const { currentTreeId, role } = useAuthStore();
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [personFilter, setPersonFilter] = useState(null); // {id, name} | null

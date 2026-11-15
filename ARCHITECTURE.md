@@ -234,6 +234,30 @@ application (`applyPrivacyRules`) plutôt que par une politique RLS
 colonne par colonne — à muscler si un blocage strict côté base
 devient nécessaire.
 
+### Rôles, transferts et cadenas (`supabase/multi_tree.sql`)
+
+- **Trois rôles par arbre** : propriétaire (`trees.owner_id`, qui a aussi
+  une ligne `admin` dans `tree_members`), admin (crée et modifie), membre
+  (lecture seule, valeur `guest` en base). Le rôle `family` a disparu :
+  ses membres sont passés en `admin`.
+- **Ce que seul le propriétaire fait** : supprimer une fiche
+  (`delete_individual`) ou l'arbre, poser ou retirer un cadenas, nommer
+  ou rétrograder un admin, transférer l'arbre, restaurer un snapshot.
+- **Transfert** : demande (`request_ownership_transfer`) avec phrase de
+  confirmation, réponse du destinataire (`respond_ownership_transfer`),
+  annulation par le propriétaire. `trees.owner_id` ne peut changer que par
+  cette procédure (trigger `guard_tree_owner`).
+- **Cadenas** (table `record_locks`) : sur une fiche, un acte (media) ou un
+  événement. Un acte cadenassé interdit de supprimer l'acte, de le retirer
+  d'une fiche ou d'un événement, et de supprimer les événements et la fiche
+  qui le portent ; les admins peuvent toujours modifier ces événements sauf
+  s'ils sont cadenassés eux-mêmes. Les règles sont des triggers : une
+  requête directe à l'API ne les contourne pas.
+- **Suppression de compte** : bloquée tant que le compte possède un arbre
+  (`trees.owner_id` en `on delete restrict`).
+- **Tests** : `supabase/tests/multi_tree_scenarios.sql` rejoue ces règles
+  sur une base de test.
+
 ## Flux d'import GEDCOM (le "noyau" livré dans cette étape)
 
 ```

@@ -79,7 +79,7 @@ function FitBounds({ points }) {
  */
 export default function WorldMapView() {
   const { currentTreeId, role, privacyThresholdYears } = useAuthStore();
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
 
   const [events, setEvents] = useState([]);
   const [places, setPlaces] = useState([]);

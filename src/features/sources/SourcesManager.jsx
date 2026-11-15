@@ -30,7 +30,7 @@ function FilterRow({ label, value, onChange, options, counts }) {
  */
 export default function SourcesManager() {
   const { currentTreeId, role } = useAuthStore();
-  const canEdit = role === 'admin' || role === 'family';
+  const canEdit = role === 'admin';
   const [sources, setSources] = useState([]);
   const [search, setSearch] = useState('');
   const [proofKind, setProofKind] = useState('all');
