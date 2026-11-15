@@ -5,6 +5,7 @@ import { validateCustomImport } from './validate.js';
 describe('dates partielles à l\'import', () => {
   it('année seule et mois + année', () => {
     expect(normalizePartialDate('1829', 'exact')).toEqual({ date: '1829-01-01', precision: 'about' });
+    expect(normalizePartialDate(1829, undefined)).toEqual({ date: '1829-01-01', precision: 'about' });
     expect(normalizePartialDate('1829-03', 'before')).toEqual({ date: '1829-03-01', precision: 'before' });
     expect(normalizePartialDate('1829-03-12', 'exact')).toEqual({ date: '1829-03-12', precision: 'exact' });
   });

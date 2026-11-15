@@ -9,8 +9,9 @@ const YEAR_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Renvoie { date, precision } normalisés pour une date éventuellement partielle. */
 export function normalizePartialDate(date, precision) {
-  if (typeof date !== 'string') return { date, precision };
-  const value = date.trim();
+  // Certaines IA écrivent l'année comme un nombre (1829) plutôt qu'un texte ("1829").
+  if (typeof date !== 'string' && typeof date !== 'number') return { date, precision };
+  const value = String(date).trim();
   let full = null;
   if (YEAR_RE.test(value)) full = `${value}-01-01`;
   else if (YEAR_MONTH_RE.test(value)) full = `${value}-01`;

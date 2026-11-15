@@ -48,7 +48,7 @@ function validateDateFacts(facts, label, errors, availableImagePaths) {
     return;
   }
   if (facts.date !== null && facts.date !== undefined && !ISO_DATE_RE.test(facts.date)) {
-    errors.push(`${label}.date : "${facts.date}" n'est pas au format AAAA-MM-JJ.`);
+    errors.push(`${label}.date : "${facts.date}" n'est pas une date valide (AAAA-MM-JJ, AAAA-MM ou AAAA).`);
   }
   if (facts.datePrecision !== undefined && !DATE_PRECISION_VALUES.includes(facts.datePrecision)) {
     errors.push(`${label}.datePrecision : "${facts.datePrecision}" invalide (attendu : ${DATE_PRECISION_VALUES.join('|')}).`);
@@ -205,7 +205,7 @@ export function validateCustomImport(model, { availableImagePaths } = {}) {
       validateDateFacts(u.marriage, `${label}.marriage`, errors, availableImagePaths);
     }
     if (u.endDate !== undefined && u.endDate !== null && !ISO_DATE_RE.test(u.endDate)) {
-      errors.push(`${label}.endDate : "${u.endDate}" n'est pas au format AAAA-MM-JJ.`);
+      errors.push(`${label}.endDate : "${u.endDate}" n'est pas une date valide (AAAA-MM-JJ, AAAA-MM ou AAAA).`);
     }
     if (u.endDatePrecision !== undefined && !DATE_PRECISION_VALUES.includes(u.endDatePrecision)) {
       errors.push(`${label}.endDatePrecision : "${u.endDatePrecision}" invalide (attendu : ${DATE_PRECISION_VALUES.join('|')}).`);
