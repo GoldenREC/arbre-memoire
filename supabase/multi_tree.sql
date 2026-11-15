@@ -462,8 +462,10 @@ begin
   delete from events where subject_kind = 'individual' and subject_id = p_individual_id;
   delete from media_links where subject_kind = 'individual' and subject_id = p_individual_id;
   delete from pet_links where subject_kind = 'individual' and subject_id = p_individual_id;
-  delete from record_locks where target_kind = 'individual' and target_id = p_individual_id;
+  -- Le cadenas doit rester en place pendant la suppression : le trigger
+  -- guard_locks_individuals le vérifie. On ne retire le cadenas qu'après.
   delete from individuals where id = p_individual_id;
+  delete from record_locks where target_kind = 'individual' and target_id = p_individual_id;
 end;
 $$;
 grant execute on function delete_individual(uuid) to authenticated;
