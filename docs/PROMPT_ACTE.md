@@ -26,6 +26,8 @@ Tu es un paléographe et généalogiste français. Je te donne la photo d'un doc
 - **`datePrecision`** vaut `"exact"` (jour, mois et année tous les trois lus dans le document, et seulement dans ce cas), `"about"` (approximative ou incomplète), `"before"`, `"after"` ou `"unknown"` (date `null`).
 - **Personne déjà décédée à la date de l'acte** (« feu », « défunt », « veuve de », « décédé ») : `"isDeceased": true` et `"death": { "date": "<date de l'acte>", "datePrecision": "before", "place": null, "proof": null }`. Si le document donne la date ou le lieu du décès, écris-les.
 - **Noms propres** : lis-les lettre à lettre, sans les remplacer par un nom plus courant. Compare toutes les occurrences du même nom dans l'acte (marge, corps du texte, signatures) : la marge et les signatures sont souvent les plus lisibles. Un nom de commune ou de hameau que tu ne reconnais pas se recopie tel quel, suivi de `[?]` dans la transcription.
+- **Date de l'acte** : lis-la dans le texte, puis contrôle-la avec la marge (jour et mois abrégés : `7bre` = septembre, `8bre` = octobre, `9bre` = novembre, `Xbre` ou `10bre` = décembre) et avec les actes voisins de la page, qui se suivent dans l'ordre des dates et des numéros. Si ta lecture contredit la marge ou l'ordre du registre, c'est ta lecture qui est fausse : relis.
+- **« En cette commune », « audit lieu », « au bourg », « en ladite commune »** désignent toujours la commune où l'acte est dressé (celle de l'officier d'état civil). Un village, hameau ou lieu-dit cité ainsi (« né à Bodegat en cette commune ») va dans `buildingName`, et `city` reçoit la commune de l'acte. Ne rattache jamais un hameau à une autre commune parce qu'un lieu du même nom existe ailleurs.
 - **Mot illisible** : écris `[illisible]` dans la transcription. **Lecture incertaine** : fais suivre le mot de `[?]` dans la transcription, et signale le doute dans `act.notes`.
 - **Chaque `localId` est unique** et écrit en minuscules sans espace ni accent (ex. `charles-ternay`). Tout `localId` cité dans `parents` ou `partners` doit exister dans `individuals`.
 
@@ -167,6 +169,8 @@ Un mariage sans date connue s'écrit `"unionType": "marriage", "marriage": null`
 - Chaque `localId` cité existe ; chaque union a exactement deux `partners`.
 - Chaque date est `AAAA-MM-JJ`, `AAAA-MM` ou `AAAA` ; `"exact"` n'accompagne que les dates complètes ; aucune valeur n'est inventée.
 - Aucune année seule n'est écrite `AAAA-01-01`.
+- La date de l'acte concorde avec la marge et avec les actes voisins ; « hier » et « ce matin » sont calculés à partir de cette date.
+- Chaque hameau ou lieu-dit « en cette commune » est rattaché à la commune de l'acte.
 - Toutes les mentions marginales ont été exploitées.
 - La transcription intégrale figure dans la preuve principale.
 
