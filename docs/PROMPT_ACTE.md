@@ -1,6 +1,6 @@
 # Prompt — transcrire un acte en JSON pour Arbre & Mémoire
 
-Copie tout le texte ci-dessous (à partir de « Tu es un paléographe ») dans une IA capable de lire une image, joins la photo ou le scan de l'acte, puis colle le JSON obtenu dans **Import / Export → Importer un acte transcrit par une IA**, avec le scan.
+Copie tout le texte ci-dessous (à partir de « Tu es un paléographe ») dans une IA capable de lire une image, joins la photo ou le scan de l'acte, relis la transcription qu'elle te donne en premier (corrige-la ou réponds « ok »), puis colle le JSON obtenu dans **Import / Export → Importer un acte transcrit par une IA**, avec le scan.
 
 ---
 
@@ -13,7 +13,12 @@ Tu es un paléographe et généalogiste français. Je te donne la photo d'un doc
 1. **Identifier le type de document** parmi : `naissance`, `deces`, `mariage`, `recensement`, `fiche_matricule`. Si c'est un autre type (baptême, sépulture, contrat…), utilise `autre`.
 2. **Lire tout le document**, y compris les **mentions marginales** (texte écrit en marge : mariage, divorce, décès, reconnaissance, adoption, légitimation, changement de nom, « Mort pour la France »…), les tampons et les ajouts postérieurs.
 3. **Relever toutes les informations** : personnes, dates, heures, lieux, adresses, professions, âges, liens de parenté, situation matrimoniale, déclarant, témoins, officier d'état civil, numéro d'acte.
-4. **Produire le JSON** décrit ci-dessous. Rien d'autre : pas de phrase avant, pas de phrase après, pas de commentaire dans le JSON.
+4. **Produire le JSON** décrit ci-dessous.
+
+**Tu travailles en deux réponses séparées, jamais en une seule.**
+
+- **Première réponse : la transcription seule.** Recopie l'acte mot à mot, ligne par ligne, marge comprise, sans rien interpréter ni moderniser. Termine par une courte liste « Lectures incertaines » (mot, ligne, autres lectures possibles). N'écris aucun JSON, puis attends ma réponse.
+- **Seconde réponse : le JSON.** Je te renvoie la transcription, corrigée si besoin, ou simplement « ok ». Tu construis alors le JSON **uniquement à partir de cette transcription validée**, sans relire l'image et sans rien ajouter qui n'y figure pas. La transcription validée est recopiée telle quelle dans `proof.transcription`. Cette seconde réponse ne contient que le JSON : pas de phrase avant, pas de phrase après, pas de commentaire dans le JSON.
 
 ## 2. Règles absolues
 
@@ -165,7 +170,8 @@ Un mariage sans date connue s'écrit `"unionType": "marriage", "marriage": null`
 
 ## 5. Vérifie avant de répondre
 
-- Le JSON est valide et constitue toute ta réponse.
+- Le JSON est valide et constitue toute ta seconde réponse.
+- Chaque nom, date et lieu du JSON se retrouve mot pour mot dans la transcription validée.
 - Chaque `localId` cité existe ; chaque union a exactement deux `partners`.
 - Chaque date est `AAAA-MM-JJ`, `AAAA-MM` ou `AAAA` ; `"exact"` n'accompagne que les dates complètes ; aucune valeur n'est inventée.
 - Aucune année seule n'est écrite `AAAA-01-01`.
@@ -298,4 +304,4 @@ Un mariage sans date connue s'écrit `"unionType": "marriage", "marriage": null`
 }
 ```
 
-Maintenant, lis le document joint et réponds uniquement par le JSON.
+Maintenant, lis le document joint et donne ta première réponse : la transcription seule.
