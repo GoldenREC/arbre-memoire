@@ -234,6 +234,15 @@ export async function addChildLink(treeId, parentId, childId, filiationType = 'b
   if (error) throw error;
 }
 
+/** Modifie le type de filiation et, pour un enfant, le couple parental (union). */
+export async function updateFiliation(filiationId, { filiationType, unionId } = {}) {
+  const patch = {};
+  if (filiationType !== undefined) patch.filiation_type = filiationType;
+  if (unionId !== undefined) patch.union_id = unionId || null;
+  const { error } = await supabase.from('filiations').update(patch).eq('id', filiationId);
+  if (error) throw error;
+}
+
 export async function removeFiliation(filiationId) {
   const { error } = await supabase.from('filiations').delete().eq('id', filiationId);
   if (error) throw error;

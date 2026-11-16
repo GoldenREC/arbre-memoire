@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import IndividualPicker from './IndividualPicker.jsx';
 import {
-  addParentLink, addChildLink, removeFiliation, createUnion, removeUnion,
+  addParentLink, addChildLink, removeFiliation, updateFiliation, createUnion, removeUnion,
 } from './individualMutations.js';
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 import UnionStatusForm from './UnionStatusForm.jsx';
@@ -78,8 +78,53 @@ function Block({ title, children, onAdd, addLabel }) {
   );
 }
 
+/** Formulaire inline : type de filiation (+ couple parental pour un enfant). */
+function FiliationEditForm({ filiationId, filiationType, unionId, unions, onChanged, onDone }) {
+  const [type, setType] = useState(filiationType || 'biological');
+  const [union, setUnion] = useState(unionId || '');
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updateFiliation(filiationId, {
+        filiationType: type,
+        unionId: unions ? (union || null) : undefined,
+      });
+      onChanged?.();
+      pushToast('Lien modifié.');
+      onDone();
+    } catch (err) {
+      pushErrorToast(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 pb-1 pt-1">
+      <select className="field" value={type} onChange={(e) => setType(e.target.value)}>
+        {Object.entries(FILIATION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+      {unions && unions.length > 0 && (
+        <select className="field" value={union} onChange={(e) => setUnion(e.target.value)}>
+          <option value="">Sans union précisée</option>
+          {unions.map((u) => (
+            <option key={u.id} value={u.id}>avec {u.partner ? `${u.partner.firstNames} ${u.partner.lastName}` : 'inconnu(e)'}</option>
+          ))}
+        </select>
+      )}
+      <div className="flex gap-3 text-xs">
+        <button onClick={save} disabled={busy} className="text-accent-600 hover:underline disabled:opacity-50">enregistrer</button>
+        <button onClick={onDone} disabled={busy} className="text-neutral-400 hover:underline">annuler</button>
+      </div>
+    </div>
+  );
+}
+
 function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [filiationType, setFiliationType] = useState('biological');
 
   async function handleSelect(person) {
@@ -106,15 +151,30 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
     <Block title="Parents" onAdd={canEdit ? () => setAdding((v) => !v) : null} addLabel={adding ? 'Annuler' : '+ Ajouter un parent'}>
       {parents.length === 0 && <p className="text-sm text-neutral-400">Aucun parent connu.</p>}
       {parents.map((p) => (
-        <div key={p.filiationId} className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-1.5">
-            <PersonLink individual={p.individual} />
-            <FiliationBadge type={p.filiationType} />
+        <div key={p.filiationId}>
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-1.5">
+              <PersonLink individual={p.individual} />
+              <FiliationBadge type={p.filiationType} />
+            </div>
+            {canEdit && (
+              <span className="flex gap-2">
+                <button onClick={() => setEditingId(editingId === p.filiationId ? null : p.filiationId)} className="text-xs text-neutral-400 hover:text-accent-600">
+                  {editingId === p.filiationId ? 'fermer' : 'modifier'}
+                </button>
+                <button onClick={() => handleRemove(p.filiationId)} className="text-xs text-neutral-400 hover:text-red-500">
+                  retirer
+                </button>
+              </span>
+            )}
           </div>
-          {canEdit && (
-            <button onClick={() => handleRemove(p.filiationId)} className="text-xs text-neutral-400 hover:text-red-500">
-              retirer
-            </button>
+          {canEdit && editingId === p.filiationId && (
+            <FiliationEditForm
+              filiationId={p.filiationId}
+              filiationType={p.filiationType}
+              onChanged={onChanged}
+              onDone={() => setEditingId(null)}
+            />
           )}
         </div>
       ))}
@@ -220,6 +280,7 @@ function UnionsBlock({ individualId, treeId, unions, events, canEdit, onChanged,
 
 function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [filiationType, setFiliationType] = useState('biological');
   const [unionId, setUnionId] = useState('');
 
@@ -256,15 +317,32 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
             </div>
           )}
           {group.children.map((c) => (
-            <div key={c.filiationId} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-1.5">
-                <PersonLink individual={c.individual} />
-                <FiliationBadge type={c.filiationType} />
+            <div key={c.filiationId}>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-1.5">
+                  <PersonLink individual={c.individual} />
+                  <FiliationBadge type={c.filiationType} />
+                </div>
+                {canEdit && (
+                  <span className="flex gap-2">
+                    <button onClick={() => setEditingId(editingId === c.filiationId ? null : c.filiationId)} className="text-xs text-neutral-400 hover:text-accent-600">
+                      {editingId === c.filiationId ? 'fermer' : 'modifier'}
+                    </button>
+                    <button onClick={() => handleRemove(c.filiationId)} className="text-xs text-neutral-400 hover:text-red-500">
+                      retirer
+                    </button>
+                  </span>
+                )}
               </div>
-              {canEdit && (
-                <button onClick={() => handleRemove(c.filiationId)} className="text-xs text-neutral-400 hover:text-red-500">
-                  retirer
-                </button>
+              {canEdit && editingId === c.filiationId && (
+                <FiliationEditForm
+                  filiationId={c.filiationId}
+                  filiationType={c.filiationType}
+                  unionId={group.union?.id || null}
+                  unions={unions}
+                  onChanged={onChanged}
+                  onDone={() => setEditingId(null)}
+                />
               )}
             </div>
           ))}
