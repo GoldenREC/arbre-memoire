@@ -71,17 +71,49 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
   const placed = new Set();
   const sortKids = byBirth(graph);
 
+  // Conjoints non encore placés, avec leur statut (une personne peut en avoir plusieurs).
+  function unplacedPartners(id) {
+    const out = [];
+    for (const u of graph.getUnions(id)) {
+      for (const q of u.partnerIds || []) {
+        if (q !== id && inTree(q) && !placed.has(q) && !out.some((o) => o.q === q)) {
+          out.push({ q, current: !['divorced', 'separated'].includes(u.status) });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Un conjoint et ses propres conjoints, placés en chaîne vers l'extérieur.
+  function claimChain(q) {
+    placed.add(q);
+    const chain = [q];
+    for (const next of unplacedPartners(q)) {
+      if (!placed.has(next.q)) chain.push(...claimChain(next.q));
+    }
+    return chain;
+  }
+
+  // Rangée d'une personne : le conjoint actuel est le plus proche, à droite ;
+  // les anciens conjoints alternent à gauche et à droite, plus loin.
+  function partnerRow(personId) {
+    const options = unplacedPartners(personId).sort((a, b) => Number(b.current) - Number(a.current));
+    const left = [];
+    const right = [];
+    let toRight = true;
+    for (const o of options) {
+      if (placed.has(o.q)) continue;
+      const chain = claimChain(o.q);
+      (toRight ? right : left).push(chain);
+      toRight = !toRight;
+    }
+    return [...left.slice().reverse().flat(), personId, ...right.flat()];
+  }
+
   // Unité = membres (une personne et ses conjoints) + enfants (unités à leur tour).
   function buildUnit(personId) {
     placed.add(personId);
-    const members = [personId];
-    for (const u of graph.getUnions(personId)) {
-      const partner = (u.partnerIds || []).find((id) => id !== personId);
-      if (partner && inTree(partner) && !placed.has(partner)) {
-        placed.add(partner);
-        members.push(partner);
-      }
-    }
+    const members = partnerRow(personId);
     const kids = [];
     for (const m of members) {
       for (const c of graph.getChildren(m)) {

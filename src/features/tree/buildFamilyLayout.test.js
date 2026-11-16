@@ -164,3 +164,23 @@ describe('aucune union enregistrée n\'est oubliée', () => {
     expect(drawn).toEqual(expect.arrayContaining(['uP', 'uX']));
   });
 });
+
+describe('conjoints voisins de la personne', () => {
+  // « moi » a un conjoint actuel (b) et un ancien (a) : chacun est à côté de moi, d'un côté ou de l'autre.
+  const people4 = { moi: { birth: '1980' }, a: {}, b: {} };
+  const unions4 = [
+    { id: 'uA', partnerIds: ['moi', 'a'], status: 'divorced', unionType: 'marriage' },
+    { id: 'uB', partnerIds: ['moi', 'b'], status: 'ongoing', unionType: 'marriage' },
+  ];
+  const g4 = fakeGraph({ people: people4, unions: unions4, links: [] });
+  const lay4 = buildFamilyLayout(g4, 'moi');
+  const x4 = (id) => lay4.nodes.find((n) => n.id === id).x;
+
+  it('le conjoint actuel est à côté de la personne', () => {
+    expect(Math.abs(x4('b') - x4('moi'))).toBe(228);
+  });
+  it('l\'ancien conjoint est aussi à côté, de l\'autre côté', () => {
+    expect(Math.abs(x4('a') - x4('moi'))).toBe(228);
+    expect(Math.sign(x4('a') - x4('moi'))).toBe(-Math.sign(x4('b') - x4('moi')));
+  });
+});
