@@ -69,3 +69,24 @@ describe('unionLook et trait commun', () => {
     expect(linkPaths(links, graph)).toHaveLength(2);
   });
 });
+
+describe('trait commun pour un enfant à plus de deux parents', () => {
+  it('fusionne le couple de même type et laisse le troisième parent seul', () => {
+    const graph = {
+      parentsOf: new Map([['c', [
+        { parentId: 'a', filiationType: 'biological' },
+        { parentId: 'b', filiationType: 'biological' },
+        { parentId: 'z', filiationType: 'adoption_simple' },
+      ]]]),
+      getUnions: (id) => (id === 'a' || id === 'b' ? [{ partnerIds: ['a', 'b'] }] : []),
+    };
+    const links = [
+      { parentId: 'a', childId: 'c', x1: 100, x2: 300, y1: 100, y2: 200 },
+      { parentId: 'b', childId: 'c', x1: 400, x2: 300, y1: 100, y2: 200 },
+      { parentId: 'z', childId: 'c', x1: 700, x2: 300, y1: 100, y2: 200 },
+    ];
+    const paths = linkPaths(links, graph);
+    expect(paths).toHaveLength(2);
+    expect(paths.some((p) => p.parentIds && p.parentIds.includes('a') && p.parentIds.includes('b'))).toBe(true);
+  });
+});
