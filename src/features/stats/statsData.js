@@ -169,6 +169,7 @@ export function bulkNmdStatus(bundle) {
     if (e.subjectKind === 'union' && e.eventType === 'marriage') marriageByUnion.set(e.subjectId, e);
   }
 
+  const unionTypeById = new Map((bundle.unions || []).map((u) => [u.id, u.unionType]));
   const statusByIndividual = new Map();
   for (const ind of bundle.individuals) {
     const events = [];
@@ -181,7 +182,7 @@ export function bulkNmdStatus(bundle) {
     const unions = myUnionIds.map((uId) => {
       const m = marriageByUnion.get(uId);
       if (m) events.push({ id: m.id, origin: 'union', eventType: 'marriage', unionId: uId, proofLevel: m.proofLevel });
-      return { id: uId };
+      return { id: uId, unionType: unionTypeById.get(uId) };
     });
 
     statusByIndividual.set(ind.id, computeNmdStatus({ individual: ind, unions, events, citations: bundle.citations }));
