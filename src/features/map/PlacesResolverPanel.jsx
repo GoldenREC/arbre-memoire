@@ -1,3 +1,4 @@
+import { supabase } from '../../lib/supabaseClient.js';
 import { useEffect, useMemo, useState } from 'react';
 import { groupPlacesByHierarchy, countCities } from './placeHierarchy.js';
 import { backfillPlaceHierarchy, placesNeedingBackfill } from '../../lib/geo/placeBackfill.js';
@@ -46,13 +47,19 @@ export default function PlacesResolverPanel({ treeId, places, eventCountByPlaceI
 
   const unresolved = places.filter((p) => p.geocode_status === 'pending' || p.geocode_status === 'failed');
   const resolved = places.filter((p) => p.geocode_status === 'ok' || p.geocode_status === 'manual');
+  // Adresse (commence par un numéro) placée seulement à la commune, ou plus large : à préciser.
+  const imprecise = places.filter(
+    (p) => ['city', 'department', 'region', 'country'].includes(p.geocode_precision) && /^\s*\d/.test(p.raw_label || '')
+  );
   const hierarchy = useMemo(() => groupPlacesByHierarchy(places, eventCountByPlaceId), [places, eventCountByPlaceId]);
   const cityCount = countCities(hierarchy);
 
   async function handleGeocodeOne(place) {
     setBusyId(place.id);
     try {
-      await geocodePlace(place, { aliases: tab === 'aliases' ? aliases : await listHistoricalAliases(treeId) });
+      // La liste n'a pas la rue ni la commune : on recharge la ligne complète pour la BAN.
+      const { data: full } = await supabase.from('places').select('*').eq('id', place.id).maybeSingle();
+      await geocodePlace(full || place, { aliases: tab === 'aliases' ? aliases : await listHistoricalAliases(treeId) });
       onPlacesChanged();
     } finally {
       setBusyId(null);
@@ -191,6 +198,28 @@ export default function PlacesResolverPanel({ treeId, places, eventCountByPlaceI
               </button>
             )}
             {unresolved.length === 0 && <p className="text-xs text-neutral-400">Tous les lieux sont résolus 🎉</p>}
+            {imprecise.length > 0 && (
+              <div className="space-y-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+                <p className="text-xs font-medium text-neutral-500">Adresses placées seulement à la commune ({imprecise.length})</p>
+                <ul className="space-y-2">
+                  {imprecise.map((p) => (
+                    <li key={p.id} className="rounded-lg border border-neutral-200 p-2 dark:border-neutral-800">
+                      <span className="text-xs">{p.raw_label}</span>
+                      {canEdit && (
+                        <div className="mt-1.5 flex gap-2 text-[11px]">
+                          <button disabled={busyId === p.id} onClick={() => handleGeocodeOne(p)} className="text-accent-600 hover:underline disabled:opacity-60">
+                            {busyId === p.id ? 'Géocodage…' : 'Re-géocoder'}
+                          </button>
+                          <button onClick={() => openManualForm(p)} className="text-neutral-500 hover:underline">
+                            Saisir manuellement
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <ul className="space-y-2">
               {unresolved.map((p) => (
                 <li key={p.id} className="rounded-lg border border-neutral-200 p-2 dark:border-neutral-800">
