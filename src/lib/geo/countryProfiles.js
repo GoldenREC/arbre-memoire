@@ -1,5 +1,7 @@
 /**
- * Profils pays pour la saisie structurée des lieux (StructuredPlaceInput).
+ * Profils pays pour la saisie structurée des lieux (StructuredPlaceInput) :
+ * France, Allemagne, Suisse, Belgique, Angleterre, Espagne, Portugal,
+ * Luxembourg, Grèce, Pérou, Thaïlande.
  *
  * Chaque profil associe, pour un pays donné, les libellés affichés aux 9
  * champs fixes du modèle de lieu (streetNumber, streetName, buildingName,
@@ -149,6 +151,28 @@ const LUXEMBOURG = nominatimProfile('Luxembourg', 'lu', {
   streetNumber: 'Numéro',
 });
 
+const PEROU = nominatimProfile('Pérou', 'pe', {
+  region: 'Région / Département',
+  department: 'Province',
+  postalCode: 'Code postal',
+  city: 'Ville / centre peuplé',
+  arrondissement: 'District (Distrito)',
+  buildingName: 'Bâtiment / lieu-dit',
+  streetName: 'Rue (Calle / Jirón / Avenida)',
+  streetNumber: 'Numéro',
+});
+
+const THAILANDE = nominatimProfile('Thaïlande', 'th', {
+  region: 'Province (Changwat)',
+  department: 'District (Amphoe)',
+  postalCode: 'Code postal',
+  city: 'Ville / village (Mueang / Muban)',
+  arrondissement: 'Sous-district (Tambon)',
+  buildingName: 'Bâtiment / lieu-dit',
+  streetName: 'Rue (Thanon)',
+  streetNumber: 'Numéro',
+});
+
 const GRECE = nominatimProfile('Grèce', 'gr', {
   region: 'Région (Périphérie)',
   department: 'Unité régionale',
@@ -161,7 +185,7 @@ const GRECE = nominatimProfile('Grèce', 'gr', {
 });
 
 export const COUNTRY_PROFILES = [
-  FRANCE, ALLEMAGNE, SUISSE, BELGIQUE, ANGLETERRE, ESPAGNE, PORTUGAL, LUXEMBOURG, GRECE,
+  FRANCE, ALLEMAGNE, SUISSE, BELGIQUE, ANGLETERRE, ESPAGNE, PORTUGAL, LUXEMBOURG, GRECE, PEROU, THAILANDE,
 ];
 
 const BY_ID = new Map(COUNTRY_PROFILES.map((p) => [p.id, p]));

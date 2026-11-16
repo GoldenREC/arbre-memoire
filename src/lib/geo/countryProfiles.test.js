@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { COUNTRY_PROFILES, getCountryProfile, GENERIC_PROFILE } from './countryProfiles.js';
 
 describe('COUNTRY_PROFILES', () => {
-  it('couvre les 9 pays demandés avec des libellés complets pour les 8 champs', () => {
-    const expectedIds = ['France', 'Allemagne', 'Suisse', 'Belgique', 'Angleterre', 'Espagne', 'Portugal', 'Luxembourg', 'Grèce'];
+  it('couvre les 11 pays demandés avec des libellés complets pour les 8 champs', () => {
+    const expectedIds = [
+      'France', 'Allemagne', 'Suisse', 'Belgique', 'Angleterre', 'Espagne', 'Portugal', 'Luxembourg', 'Grèce',
+      'Pérou', 'Thaïlande',
+    ];
     expect(COUNTRY_PROFILES.map((p) => p.id).sort()).toEqual([...expectedIds].sort());
 
     const requiredLabelKeys = [
