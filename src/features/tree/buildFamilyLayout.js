@@ -83,7 +83,7 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
     for (const u of graph.getUnions(id)) {
       for (const q of u.partnerIds || []) {
         if (q !== id && inTree(q) && !placed.has(q) && !out.some((o) => o.q === q)) {
-          out.push({ q, current: !['divorced', 'separated'].includes(u.status) });
+          out.push({ q, current: !['divorced', 'separated'].includes(u.status), startDate: u.startDate || '' });
         }
       }
     }
@@ -100,20 +100,22 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
     return chain;
   }
 
-  // Rangée d'une personne : le conjoint actuel est le plus proche, à droite ;
-  // les anciens conjoints alternent à gauche et à droite, plus loin.
+  // Rangée d'une personne : le ou les conjoints actuels sont à droite, le plus proche en premier ;
+  // les anciens conjoints sont à gauche, du plus récent (le plus proche) au plus ancien.
+  // Une union sans date passe après les unions datées.
   function partnerRow(personId) {
-    const options = unplacedPartners(personId).sort((a, b) => Number(b.current) - Number(a.current));
-    const left = [];
+    const options = unplacedPartners(personId);
+    const current = options.filter((o) => o.current);
+    const former = options.filter((o) => !o.current).sort((a, b) => (b.startDate < a.startDate ? -1 : b.startDate > a.startDate ? 1 : 0));
     const right = [];
-    let toRight = true;
-    for (const o of options) {
-      if (placed.has(o.q)) continue;
-      const chain = claimChain(o.q);
-      (toRight ? right : left).push(chain);
-      toRight = !toRight;
+    const left = [];
+    for (const o of current) {
+      if (!placed.has(o.q)) right.push(claimChain(o.q));
     }
-    // À gauche : le plus éloigné en premier, et dans chaque chaîne le conjoint direct est le plus proche de la personne.
+    for (const o of former) {
+      if (!placed.has(o.q)) left.push(claimChain(o.q));
+    }
+    // À gauche : le plus éloigné en premier ; dans chaque chaîne, le conjoint direct est le plus proche.
     const leftRow = left.slice().reverse().flatMap((chain) => chain.slice().reverse());
     return [...leftRow, personId, ...right.flat()];
   }
