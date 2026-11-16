@@ -5,11 +5,13 @@ import { FamilyTreeProvider, useFamilyTree } from './FamilyTreeContext.jsx';
 import AscendancyView from './AscendancyView.jsx';
 import DescendancyView from './DescendancyView.jsx';
 import FanChartView from './FanChartView.jsx';
+import CoupleView from './CoupleView.jsx';
 
 const TABS = [
   { key: 'ascendance', label: 'Ascendance' },
   { key: 'descendance', label: 'Descendance' },
   { key: 'eventail', label: 'Éventail' },
+  { key: 'couples', label: 'Couples' },
 ];
 
 /**
@@ -140,6 +142,7 @@ function FamilyTreeExplorer() {
         {tab === 'ascendance' && <AscendancyView onOpenIndividual={openIndividual} />}
         {tab === 'descendance' && <DescendancyView onOpenIndividual={openIndividual} />}
         {tab === 'eventail' && <FanChartView onOpenIndividual={openIndividual} />}
+        {tab === 'couples' && <CoupleView onOpenIndividual={openIndividual} />}
       </div>
     </div>
   );
