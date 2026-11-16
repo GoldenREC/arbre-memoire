@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkPaths } from './familyBuses.js';
+import { linkLook, linkPaths } from './familyBuses.js';
 
 const link = (parentId, childId, x1, x2, y1 = 100, y2 = 200) => ({ parentId, childId, x1, x2, y1, y2 });
 
@@ -20,5 +20,18 @@ describe('linkPaths', () => {
     const [p] = linkPaths([link('p1', 'c', 50, 300)]);
     expect(p.d.startsWith('M 50 100 ')).toBe(true);
     expect(p.d.endsWith(' 300 200')).toBe(true);
+  });
+});
+
+describe('linkLook', () => {
+  it('reste fin et gris sans survol', () => {
+    expect(linkLook({ parentId: 'p', childId: 'c' }, null, '#00f')).toMatchObject({ stroke: '#a3a3a3', strokeWidth: 1 });
+  });
+  it('prend sa couleur quand la personne survolée est l\'enfant ou le parent', () => {
+    expect(linkLook({ parentId: 'p', childId: 'c' }, 'c', '#00f')).toMatchObject({ stroke: '#00f', strokeWidth: 2.5 });
+    expect(linkLook({ parentId: 'p', childId: 'c' }, 'p', '#00f')).toMatchObject({ stroke: '#00f', strokeWidth: 2.5 });
+  });
+  it('s\'estompe quand il n\'est pas concerné', () => {
+    expect(linkLook({ parentId: 'p', childId: 'c' }, 'x', '#00f').opacity).toBeLessThan(1);
   });
 });
