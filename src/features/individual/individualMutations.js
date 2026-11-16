@@ -232,15 +232,71 @@ export async function addChildLink(treeId, parentId, childId, filiationType = 'b
     .from('filiations')
     .upsert({ tree_id: treeId, child_id: childId, parent_id: parentId, filiation_type: filiationType, union_id: unionId }, { onConflict: 'child_id,parent_id,filiation_type' });
   if (error) throw error;
+  await ensureReciprocalChildLink(treeId, childId, parentId, unionId, filiationType);
 }
 
-/** Modifie le type de filiation et, pour un enfant, le couple parental (union). */
-export async function updateFiliation(filiationId, { filiationType, unionId } = {}) {
+/**
+ * Modifie le type de filiation et, pour un enfant, le couple parental
+ * (union). Préciser treeId/childId/parentId (uniquement pertinent côté
+ * "Enfants", où une union peut être choisie) déclenche en plus la création
+ * du lien réciproque chez l'autre parent de cette union — voir
+ * ensureReciprocalChildLink.
+ */
+export async function updateFiliation(filiationId, { filiationType, unionId, treeId, childId, parentId } = {}) {
   const patch = {};
   if (filiationType !== undefined) patch.filiation_type = filiationType;
   if (unionId !== undefined) patch.union_id = unionId || null;
   const { error } = await supabase.from('filiations').update(patch).eq('id', filiationId);
   if (error) throw error;
+  if (unionId && treeId && childId && parentId && filiationType) {
+    await ensureReciprocalChildLink(treeId, childId, parentId, unionId, filiationType);
+  }
+}
+
+/** Le partenaire "en face" de individualId dans l'union unionId, ou null si introuvable. */
+async function otherUnionPartnerId(unionId, individualId) {
+  const { data, error } = await supabase.from('union_partners').select('individual_id').eq('union_id', unionId);
+  if (error) throw error;
+  return (data || []).map((r) => r.individual_id).find((id) => id !== individualId) || null;
+}
+
+/**
+ * Quand un enfant est relié à un parent avec une union précisée (ex. "avec
+ * Yolande Schatt" sur la fiche de Jean-Marc), s'assure que l'autre membre
+ * de cette union a, lui aussi, un lien de filiation vers cet enfant — sans
+ * quoi l'enfant n'apparaît que d'un seul côté et il faut le rajouter à la
+ * main sur la fiche de l'autre parent.
+ *
+ * Ne touche jamais un lien déjà existant chez l'autre parent (type de
+ * filiation différent compris, ex. une mère biologique et un père par
+ * adoption plénière pour le même enfant) : un lien s'y trouve déjà →
+ * on complète juste l'union s'il n'en avait pas, sans changer son type ;
+ * aucun lien → on en crée un, avec le même type que celui qu'on vient de
+ * saisir (l'utilisateur peut ensuite le corriger si les deux parents
+ * n'ont pas le même type de filiation pour cet enfant).
+ */
+async function ensureReciprocalChildLink(treeId, childId, parentId, unionId, filiationType) {
+  if (!unionId) return;
+  const otherId = await otherUnionPartnerId(unionId, parentId);
+  if (!otherId) return;
+  const { data: existingRows, error: selErr } = await supabase
+    .from('filiations')
+    .select('id, union_id')
+    .eq('child_id', childId)
+    .eq('parent_id', otherId);
+  if (selErr) throw selErr;
+  const existing = (existingRows || [])[0];
+  if (existing) {
+    if (!existing.union_id) {
+      const { error: updErr } = await supabase.from('filiations').update({ union_id: unionId }).eq('id', existing.id);
+      if (updErr) throw updErr;
+    }
+    return;
+  }
+  const { error: insErr } = await supabase
+    .from('filiations')
+    .insert({ tree_id: treeId, child_id: childId, parent_id: otherId, filiation_type: filiationType, union_id: unionId });
+  if (insErr) throw insErr;
 }
 
 export async function removeFiliation(filiationId) {

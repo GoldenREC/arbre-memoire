@@ -92,7 +92,7 @@ function EventInfo({ event }) {
 
 /** Formulaire inline : type de filiation, couple (enfant), et pour les liens datés
  *  (adoption, famille d'accueil, reconnaissance, abandon) la date, le lieu et la preuve. */
-function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, eventDate, eventPrecision, eventPlaceId, filiationType, unionId, unions, onChanged, onDone }) {
+function FiliationEditForm({ treeId, childId, childName, parentId, filiationId, eventId, eventDate, eventPrecision, eventPlaceId, filiationType, unionId, unions, onChanged, onDone }) {
   const [type, setType] = useState(filiationType || 'biological');
   const [union, setUnion] = useState(unionId || '');
   const [date, setDate] = useState(eventDate || '');
@@ -126,6 +126,12 @@ function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, e
       await updateFiliation(filiationId, {
         filiationType: type,
         unionId: unions ? (union || null) : undefined,
+        // Permet à updateFiliation de relier aussi l'enfant à l'autre
+        // parent de l'union choisie (voir ensureReciprocalChildLink) —
+        // uniquement pertinent côté "Enfants" (unions renseigné ci-dessus).
+        treeId: unions ? treeId : undefined,
+        childId: unions ? childId : undefined,
+        parentId: unions ? parentId : undefined,
       });
       if (needsEvent) {
         await saveFiliationEvent(treeId, { filiationId, eventId, childId, childName, filiationType: type, date, datePrecision, place, proof });
@@ -399,6 +405,7 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
                   treeId={treeId}
                   childId={c.individual?.id}
                   childName={[c.individual?.firstNames, c.individual?.lastName].filter(Boolean).join(' ')}
+                  parentId={individualId}
                   filiationId={c.filiationId}
                   eventId={c.eventId}
                   eventDate={c.event?.date}

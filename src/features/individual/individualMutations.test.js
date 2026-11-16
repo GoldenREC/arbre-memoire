@@ -172,6 +172,100 @@ describe('fetchStructuredPlace', () => {
   });
 });
 
+describe('addChildLink — lien réciproque vers l\'autre parent de l\'union', () => {
+  it('crée aussi le lien de filiation chez l\'autre membre de l\'union (même type), sans y toucher s\'il existait déjà', async () => {
+    mock = makeSupabaseMock({
+      union_partners: [
+        { union_id: 'union-1', individual_id: 'jean-marc' },
+        { union_id: 'union-1', individual_id: 'yolande' },
+      ],
+    });
+    const { addChildLink } = await import('./individualMutations.js');
+    await addChildLink('tree-1', 'jean-marc', 'enfant-1', 'biological', 'union-1');
+    expect(mock.inserted.filiations).toEqual([
+      { tree_id: 'tree-1', child_id: 'enfant-1', parent_id: 'yolande', filiation_type: 'biological', union_id: 'union-1' },
+    ]);
+  });
+
+  it('ne crée rien côté autre parent quand aucune union n\'est précisée', async () => {
+    mock = makeSupabaseMock({
+      union_partners: [
+        { union_id: 'union-1', individual_id: 'jean-marc' },
+        { union_id: 'union-1', individual_id: 'yolande' },
+      ],
+    });
+    const { addChildLink } = await import('./individualMutations.js');
+    await addChildLink('tree-1', 'jean-marc', 'enfant-1', 'biological', null);
+    expect(mock.inserted.filiations).toBeUndefined();
+  });
+
+  it('ne duplique pas et ne change pas le type si l\'autre parent a déjà un lien (même avec un type différent, ex. adoption)', async () => {
+    mock = makeSupabaseMock({
+      union_partners: [
+        { union_id: 'union-1', individual_id: 'laetitia' },
+        { union_id: 'union-1', individual_id: 'christophe' },
+      ],
+      filiations: [
+        { id: 'f-existing', child_id: 'coline', parent_id: 'christophe', filiation_type: 'adoption_plenary', union_id: 'union-1' },
+      ],
+    });
+    const { addChildLink } = await import('./individualMutations.js');
+    await addChildLink('tree-1', 'laetitia', 'coline', 'biological', 'union-1');
+    expect(mock.inserted.filiations).toBeUndefined();
+    const christopheLink = mock.tables.filiations.find((f) => f.parent_id === 'christophe');
+    expect(christopheLink.filiation_type).toBe('adoption_plenary');
+  });
+
+  it('complète juste l\'union d\'un lien existant chez l\'autre parent qui n\'en avait pas encore', async () => {
+    mock = makeSupabaseMock({
+      union_partners: [
+        { union_id: 'union-1', individual_id: 'jean-marc' },
+        { union_id: 'union-1', individual_id: 'yolande' },
+      ],
+      filiations: [
+        { id: 'f-existing', child_id: 'enfant-1', parent_id: 'yolande', filiation_type: 'biological', union_id: null },
+      ],
+    });
+    const { addChildLink } = await import('./individualMutations.js');
+    await addChildLink('tree-1', 'jean-marc', 'enfant-1', 'biological', 'union-1');
+    expect(mock.inserted.filiations).toBeUndefined();
+    const yolandeLink = mock.tables.filiations.find((f) => f.id === 'f-existing');
+    expect(yolandeLink.union_id).toBe('union-1');
+  });
+});
+
+describe('updateFiliation — lien réciproque vers l\'autre parent de l\'union', () => {
+  it('crée le lien réciproque quand on précise treeId/childId/parentId avec une union', async () => {
+    mock = makeSupabaseMock({
+      filiations: [{ id: 'f-1', child_id: 'enfant-1', parent_id: 'jean-marc', filiation_type: 'biological', union_id: null }],
+      union_partners: [
+        { union_id: 'union-1', individual_id: 'jean-marc' },
+        { union_id: 'union-1', individual_id: 'yolande' },
+      ],
+    });
+    const { updateFiliation } = await import('./individualMutations.js');
+    await updateFiliation('f-1', {
+      filiationType: 'biological', unionId: 'union-1', treeId: 'tree-1', childId: 'enfant-1', parentId: 'jean-marc',
+    });
+    expect(mock.inserted.filiations).toEqual([
+      { tree_id: 'tree-1', child_id: 'enfant-1', parent_id: 'yolande', filiation_type: 'biological', union_id: 'union-1' },
+    ]);
+  });
+
+  it('ne fait rien côté réciproque sans treeId/childId/parentId (ex. édition d\'un lien "Parents")', async () => {
+    mock = makeSupabaseMock({
+      filiations: [{ id: 'f-1', child_id: 'enfant-1', parent_id: 'jean-marc', filiation_type: 'biological', union_id: null }],
+      union_partners: [
+        { union_id: 'union-1', individual_id: 'jean-marc' },
+        { union_id: 'union-1', individual_id: 'yolande' },
+      ],
+    });
+    const { updateFiliation } = await import('./individualMutations.js');
+    await updateFiliation('f-1', { filiationType: 'biological', unionId: 'union-1' });
+    expect(mock.inserted.filiations).toBeUndefined();
+  });
+});
+
 describe('updateIndividualCivilInfo — lieux', () => {
   it('ne touche pas au lieu existant quand la clé places.birth est absente', async () => {
     mock = makeSupabaseMock({ individuals: [{ id: 'ind-1', birth_place_id: 'place-original' }] });
