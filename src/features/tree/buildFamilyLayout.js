@@ -107,7 +107,9 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
       (toRight ? right : left).push(chain);
       toRight = !toRight;
     }
-    return [...left.slice().reverse().flat(), personId, ...right.flat()];
+    // À gauche : le plus éloigné en premier, et dans chaque chaîne le conjoint direct est le plus proche de la personne.
+    const leftRow = left.slice().reverse().flatMap((chain) => chain.slice().reverse());
+    return [...leftRow, personId, ...right.flat()];
   }
 
   // Unité = membres (une personne et ses conjoints) + enfants (unités à leur tour).
