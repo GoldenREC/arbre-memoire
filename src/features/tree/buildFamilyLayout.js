@@ -93,7 +93,17 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
     for (const c of kids) {
       if (!placed.has(c)) children.push(buildUnit(c));
     }
+    // Frères et sœurs plus âgés que la racine : leurs conjoints se placent à l'extérieur
+    // (à gauche de la personne), la racine garde son conjoint à droite.
+    const rootIdx = children.findIndex((u) => u.members.includes(rootId));
+    if (rootIdx > 0) children.slice(0, rootIdx).forEach(setOutward);
     return { members, children, level: levels.get(personId) };
+  }
+
+  // Inverse l'ordre des membres d'une unité (et de ses descendants) : le conjoint passe à gauche.
+  function setOutward(unit) {
+    unit.members.reverse();
+    unit.children.forEach(setOutward);
   }
 
   function ownWidth(unit) {
