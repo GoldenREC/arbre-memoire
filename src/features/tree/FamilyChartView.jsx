@@ -3,7 +3,7 @@ import { useFamilyTree } from './FamilyTreeContext.jsx';
 
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
-import { linkLook, linkPaths, unionLook } from './familyBuses.js';
+import { arcBus, linkLook, linkPaths, unionLook } from './familyBuses.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
 import TreeLegend from './TreeLegend.jsx';
@@ -64,7 +64,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
               // Tracé orthogonal : sort de la carte par le côté, descend sous la rangée, rentre par le côté du conjoint.
               const look = unionLook(a.partnerIds, focusId, u.color);
               const sA = a.bx > a.ax ? 1 : -1;
-              const bus = Math.max(a.ay, a.by) + CARD_H / 2 + 22 + a.lane * 12;
+              const bus = arcBus(a);
               const x1 = a.ax + sA * 10;
               const x2 = a.bx - sA * 10;
               return (
@@ -80,7 +80,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
                 />
               );
             })}
-            {linkPaths(links, graph).map((p, i) => {
+            {linkPaths(links, graph, arcs.map(arcBus)).map((p, i) => {
               const style = linkStyle(graph, p.childId, [p.parentId]);
               const look = linkLook(p, focusId, style.color);
               return <path key={`l${i}`} d={p.d} fill="none" stroke={look.stroke} strokeWidth={look.strokeWidth} strokeOpacity={look.opacity} strokeDasharray={style.dash} />;
@@ -99,7 +99,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
               }}
               title="Survole une personne pour voir ses liens parentaux, double-clic pour la centrer"
             >
-              <div className="absolute -top-2 right-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <div className="absolute -top-7 right-0 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <button
                   type="button"
                   onPointerDown={(e) => e.stopPropagation()}
