@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../../components/ui/Modal.jsx';
 import { fetchIndividualForMerge, mergeLiveIndividuals, commitMerge } from './mergeDuplicates.js';
 
@@ -28,6 +28,15 @@ export default function MergeDuplicateDialog({ treeId, aId, bId, onClose, onMerg
   const [resolutions, setResolutions] = useState({});
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState(null);
+  // Un double-clic peut partir avant que React n'ait eu le temps de
+  // désactiver le bouton via `disabled={committing}` (son état ne se
+  // répercute qu'au prochain rendu) : deux fusions concurrentes de la
+  // même paire font alors échouer la seconde avec "fiche introuvable",
+  // la première ayant déjà supprimé le doublon — rien n'est perdu, mais
+  // l'erreur est trompeuse. Ce verrou, lu et posé de façon synchrone (pas
+  // via un state React), bloque tout second appel tant que le premier
+  // n'est pas terminé, quelle qu'en soit l'origine.
+  const committingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +56,8 @@ export default function MergeDuplicateDialog({ treeId, aId, bId, onClose, onMerg
   }
 
   async function handleMerge() {
+    if (committingRef.current) return;
+    committingRef.current = true;
     setCommitting(true);
     setCommitError(null);
     try {
@@ -56,6 +67,7 @@ export default function MergeDuplicateDialog({ treeId, aId, bId, onClose, onMerg
       console.error(err);
       setCommitError(err.message || 'La fusion a échoué.');
     } finally {
+      committingRef.current = false;
       setCommitting(false);
     }
   }
