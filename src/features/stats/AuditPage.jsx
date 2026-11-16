@@ -86,10 +86,15 @@ export default function AuditPage() {
   const individualsById = useMemo(() => (state.bundle ? new Map(state.bundle.individuals.map((i) => [i.id, i])) : null), [state.bundle]);
 
   const findings = useMemo(() => {
-    if (!state.bundle) return [];
+    if (!state.bundle || !individualsById) return [];
     const { individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById } = state.bundle;
-    return runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById });
-  }, [state.bundle]);
+    const raw = runFullAudit({ individuals, filiations, unions, partnersByUnion, unionPartners, events, citations, sources, placesById });
+    // Filet de sécurité : un constat qui pointe vers une fiche qui n'existe
+    // plus (ex. fusionnée entre-temps, dans un autre onglet ou juste avant
+    // un recalcul) ne doit jamais apparaître — mieux vaut le faire
+    // disparaître jusqu'au prochain recalcul que mener vers une fiche introuvable.
+    return raw.filter((f) => f.individualIds.every((id) => individualsById.has(id)));
+  }, [state.bundle, individualsById]);
 
   // Règles actuelles (130 ans, preuves naissance/décès/union) appliquées aux données existantes.
   const ruleFindings = useMemo(() => {
@@ -214,6 +219,14 @@ export default function AuditPage() {
       </p>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => { reload(); pushToast('Audit recalculé.'); }}
+          disabled={state.loading}
+          title="Relance tous les calculs à partir des données actuelles — utile après une fusion de fiches ou toute autre correction, pour faire disparaître les constats qui ne tiennent plus."
+          className="rounded-lg bg-accent-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-50"
+        >
+          {state.loading ? 'Recalcul en cours…' : '↻ Recalculer les incohérences'}
+        </button>
         <button
           onClick={handleCleanupDuplicates}
           disabled={cleanup.running}
