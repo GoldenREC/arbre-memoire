@@ -44,7 +44,7 @@ async function fetchIndividualsByIds(ids) {
 /** Date et lieu de l'événement d'un lien daté (adoption, reconnaissance…). */
 function eventSummary(ev) {
   if (!ev) return null;
-  return { date: ev.event_date || '', precision: ev.date_precision || 'unknown', placeLabel: ev.places?.raw_label || '' };
+  return { date: ev.event_date || '', precision: ev.date_precision || 'unknown', placeId: ev.place_id || null, placeLabel: ev.places?.raw_label || '' };
 }
 
 export function useIndividualDetail(individualId) {
@@ -65,8 +65,8 @@ export function useIndividualDetail(individualId) {
 
       const [{ data: parentLinks, error: pErr }, { data: childLinks, error: cErr }, { data: myPartnerRows, error: mpErr }] =
         await Promise.all([
-          supabase.from('filiations').select('id, parent_id, union_id, filiation_type, event_id, events(id, event_date, date_precision, places(raw_label))').eq('child_id', individualId),
-          supabase.from('filiations').select('id, child_id, union_id, filiation_type, event_id, events(id, event_date, date_precision, places(raw_label))').eq('parent_id', individualId),
+          supabase.from('filiations').select('id, parent_id, union_id, filiation_type, event_id, events(id, event_date, date_precision, place_id, places(raw_label))').eq('child_id', individualId),
+          supabase.from('filiations').select('id, child_id, union_id, filiation_type, event_id, events(id, event_date, date_precision, place_id, places(raw_label))').eq('parent_id', individualId),
           supabase.from('union_partners').select('union_id').eq('individual_id', individualId),
         ]);
       if (pErr) throw pErr;

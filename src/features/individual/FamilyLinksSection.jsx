@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import DatePartsInput from '../../components/ui/DatePartsInput.jsx';
+import StructuredPlaceInput from '../../components/ui/StructuredPlaceInput.jsx';
+import { EMPTY_PLACE, isPlaceEmpty } from '../../lib/utils/placeLabel.js';
+import { formatGenealogyDate } from '../../lib/utils/dates.js';
 import { Link } from 'react-router-dom';
 import IndividualPicker from './IndividualPicker.jsx';
 import {
@@ -9,6 +13,7 @@ import UnionStatusForm from './UnionStatusForm.jsx';
 import { RELATIONSHIP_STATUS_LABELS, relationshipStatusFromUnion } from './unionMutations.js';
 import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
 import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
+import { fetchStructuredPlace } from './individualMutations.js';
 
 export const FILIATION_LABELS = {
   adoption_plenary: 'Adoption plénière',
@@ -78,23 +83,36 @@ function Block({ title, children, onAdd, addLabel }) {
 /** « · 12/03/2001 · Marseille » après un lien daté ; rien pour un lien sans événement. */
 function EventInfo({ event }) {
   if (!event || (!event.date && !event.placeLabel)) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(event.date || '');
-  const date = m ? `${m[3]}/${m[2]}/${m[1]}` : event.date;
-  return <span className="text-xs text-neutral-500">{[date, event.placeLabel].filter(Boolean).map((t) => ` · ${t}`).join('')}</span>;
+  const date = event.date ? formatGenealogyDate({ date: event.date, datePrecision: event.precision }) : '';
+  const parts = [date, event.placeLabel].filter(Boolean);
+  if (!parts.length) return null;
+  return <span className="text-xs text-neutral-500">{parts.map((t) => ` · ${t}`).join('')}</span>;
 }
 
 /** Formulaire inline : type de filiation, couple (enfant), et pour les liens datés
  *  (adoption, famille d'accueil, reconnaissance, abandon) la date, le lieu et la preuve. */
-function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, eventDate, eventPlace, filiationType, unionId, unions, onChanged, onDone }) {
+function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, eventDate, eventPrecision, eventPlaceId, filiationType, unionId, unions, onChanged, onDone }) {
   const [type, setType] = useState(filiationType || 'biological');
   const [union, setUnion] = useState(unionId || '');
   const [date, setDate] = useState(eventDate || '');
-  const [placeLabel, setPlaceLabel] = useState(eventPlace || '');
+  const [datePrecision, setDatePrecision] = useState(eventPrecision && eventPrecision !== 'unknown' ? eventPrecision : 'exact');
+  const [place, setPlace] = useState(EMPTY_PLACE);
+  const [loadingPlace, setLoadingPlace] = useState(!!eventPlaceId);
   const [proof, setProof] = useState(EMPTY_DATE_PROOF);
   const [busy, setBusy] = useState(false);
   const needsEvent = filiationNeedsEvent(type);
   const question = FILIATION_EVENT_QUESTION[FILIATION_EVENT_TYPE[type]];
-  const hasInfo = !!date || !!placeLabel.trim();
+  const hasInfo = !!date || !isPlaceEmpty(place);
+
+  // Pré-remplit le lieu structuré de l'événement existant.
+  useEffect(() => {
+    if (!eventPlaceId) return;
+    let cancelled = false;
+    fetchStructuredPlace(eventPlaceId)
+      .then((p) => { if (!cancelled && p) setPlace(p); })
+      .finally(() => { if (!cancelled) setLoadingPlace(false); });
+    return () => { cancelled = true; };
+  }, [eventPlaceId]);
   const proofMissing = needsEvent && hasInfo && !isDateProofValid(proof);
 
   async function save() {
@@ -109,7 +127,7 @@ function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, e
         unionId: unions ? (union || null) : undefined,
       });
       if (needsEvent) {
-        await saveFiliationEvent(treeId, { filiationId, eventId, childId, childName, filiationType: type, date, placeLabel, proof });
+        await saveFiliationEvent(treeId, { filiationId, eventId, childId, childName, filiationType: type, date, datePrecision, place, proof });
       }
       onChanged?.();
       pushToast('Lien modifié.');
@@ -137,10 +155,12 @@ function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, e
       {needsEvent && (
         <div className="space-y-2 rounded-lg border border-neutral-200 p-2 dark:border-neutral-700">
           <p className="text-xs text-neutral-500">{question.charAt(0).toUpperCase() + question.slice(1)}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date" />
-            <input className="field" placeholder="Lieu (ville, département…)" value={placeLabel} onChange={(e) => setPlaceLabel(e.target.value)} aria-label="Lieu" />
-          </div>
+          <DatePartsInput value={date} onChange={setDate} disabled={busy} precision={datePrecision} onPrecisionChange={setDatePrecision} />
+          {loadingPlace ? (
+            <p className="text-xs text-neutral-400">Chargement du lieu…</p>
+          ) : (
+            <StructuredPlaceInput value={place} onChange={setPlace} disabled={busy} />
+          )}
           <DateProofInput value={proof} onChange={setProof} disabled={busy} message="Une preuve (acte ou informations familiales) est requise pour la date ou le lieu." />
         </div>
       )}
@@ -207,7 +227,8 @@ function ParentsBlock({ individualId, individualName, treeId, parents, canEdit, 
               filiationId={p.filiationId}
               eventId={p.eventId}
               eventDate={p.event?.date}
-              eventPlace={p.event?.placeLabel}
+              eventPrecision={p.event?.precision}
+              eventPlaceId={p.event?.placeId}
               filiationType={p.filiationType}
               onChanged={onChanged}
               onDone={() => setEditingId(null)}
@@ -380,7 +401,8 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
                   filiationId={c.filiationId}
                   eventId={c.eventId}
                   eventDate={c.event?.date}
-                  eventPlace={c.event?.placeLabel}
+                  eventPrecision={c.event?.precision}
+                  eventPlaceId={c.event?.placeId}
                   filiationType={c.filiationType}
                   unionId={group.union?.id || null}
                   unions={unions}
