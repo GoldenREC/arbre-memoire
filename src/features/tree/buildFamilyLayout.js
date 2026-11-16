@@ -15,7 +15,7 @@ export const CARD_W = 208;
 export const CARD_H = 64;
 const H_GAP = 36; // entre deux unités (frères, cousins)
 const M_GAP = 20; // entre deux membres d'un même couple
-const ROW_H = 150; // hauteur d'une génération
+const ROW_H = 200; // hauteur d'une génération
 const PAD = 40;
 
 /** Génération de chaque personne par rapport à la racine (racine = 0). */
