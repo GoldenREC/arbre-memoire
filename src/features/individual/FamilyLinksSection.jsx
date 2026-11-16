@@ -11,7 +11,8 @@ import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../compon
 import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
 
 export const FILIATION_LABELS = {
-  biological: 'Biologique',
+  biological: 'Biologique (reconnu)',
+  biological_unrecognized: 'Biologique non reconnu',
   adoption_plenary: 'Adoption plénière',
   adoption_simple: 'Adoption simple',
   foster: "Famille d'accueil",
@@ -21,15 +22,8 @@ export const FILIATION_LABELS = {
 };
 
 function FiliationBadge({ type }) {
-  const isBiological = type === 'biological';
   return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-[11px] ${
-        isBiological
-          ? 'border-neutral-200 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'
-          : 'border-dashed border-accent-400 text-accent-600 dark:text-accent-300'
-      }`}
-    >
+    <span className="whitespace-nowrap rounded-full border border-neutral-300 px-2 py-0.5 text-[11px] text-neutral-600 dark:border-neutral-600 dark:text-neutral-300">
       {FILIATION_LABELS[type] || type}
     </span>
   );
