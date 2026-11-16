@@ -22,7 +22,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
     return <p className="text-sm text-neutral-400">Aucun individu sélectionné.</p>;
   }
 
-  const { nodes, couples, links, bounds } = layout;
+  const { nodes, couples, links, arcs, bounds } = layout;
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
 
@@ -54,6 +54,20 @@ export default function FamilyChartView({ onOpenIndividual }) {
             {couples.map((c, i) => {
               const u = unionStyle(c.status, c.unionType);
               return <line key={`c${i}`} x1={c.x1} y1={c.y} x2={c.x2} y2={c.y} stroke={u.color} strokeWidth={2.5} strokeDasharray={u.dash} />;
+            })}
+            {arcs.map((a, i) => {
+              const u = unionStyle(a.status, a.unionType);
+              const ym = Math.max(a.ay, a.by) + 26;
+              return (
+                <path
+                  key={`a${i}`}
+                  d={`M ${a.ax} ${a.ay} C ${a.ax} ${ym}, ${a.bx} ${ym}, ${a.bx} ${a.by}`}
+                  fill="none"
+                  stroke={u.color}
+                  strokeWidth={2.5}
+                  strokeDasharray={u.dash}
+                />
+              );
             })}
             {links.map((l, i) => {
               const style = linkStyle(graph, l.childId, [l.parentId]);
