@@ -17,6 +17,7 @@ const PROOF_TYPE_VALUES = ['acte', 'marginal', 'family'];
 export const EXTRA_EVENT_TYPE_VALUES = [
   'residence', 'census', 'occupation', 'military', 'baptism', 'burial',
   'education', 'immigration', 'emigration', 'religion', 'custom',
+  'adoption', 'foster_placement', 'recognition', 'abandonment',
 ];
 const UNION_STATUS_VALUES = ['ongoing', 'divorced', 'widowed', 'annulled', 'unknown'];
 const UNION_TYPE_VALUES = ['marriage', 'civil_union', 'cohabitation', 'unknown'];
@@ -26,6 +27,7 @@ const FILIATION_TYPE_VALUES = [
   'adoption_simple',
   'foster',
   'late_recognition',
+  'abandoned',
   'unknown',
 ];
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

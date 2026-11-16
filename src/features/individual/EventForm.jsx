@@ -8,6 +8,7 @@ export const EVENT_TYPE_LABELS = {
   residence: 'Résidence', immigration: 'Immigration', emigration: 'Émigration',
   occupation: 'Profession', education: 'Études', military: 'Service militaire',
   religion: 'Religion', custom: 'Autre',
+  adoption: 'Adoption', foster_placement: "Mise en famille d'accueil", recognition: 'Reconnaissance', abandonment: 'Abandon',
 };
 
 const PRECISION_OPTIONS = [

@@ -7,6 +7,8 @@ import {
 import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 import UnionStatusForm from './UnionStatusForm.jsx';
 import { RELATIONSHIP_STATUS_LABELS, relationshipStatusFromUnion } from './unionMutations.js';
+import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
+import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, fetchFiliationEvent, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
 
 export const FILIATION_LABELS = {
   biological: 'Biologique',
@@ -14,6 +16,7 @@ export const FILIATION_LABELS = {
   adoption_simple: 'Adoption simple',
   foster: "Famille d'accueil",
   late_recognition: 'Reconnaissance tardive',
+  abandoned: 'Enfant non déclaré / abandonné',
   unknown: 'Inconnu',
 };
 
@@ -53,7 +56,7 @@ export default function FamilyLinksSection({ individual, treeId, parents, unions
   const [unionFormOpen, setUnionFormOpen] = useState(false);
   return (
     <div className={`grid gap-4 ${unionFormOpen ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
-      <ParentsBlock individualId={individual.id} treeId={treeId} parents={parents} canEdit={canEdit} onChanged={onChanged} />
+      <ParentsBlock individualId={individual.id} individualName={[individual.firstNames, individual.lastName].filter(Boolean).join(' ')} treeId={treeId} parents={parents} canEdit={canEdit} onChanged={onChanged} />
       <div className={unionFormOpen ? 'order-last sm:col-span-2' : ''}>
         <UnionsBlock individualId={individual.id} treeId={treeId} unions={unions} events={events} canEdit={canEdit} onChanged={onChanged} onEditingChange={setUnionFormOpen} />
       </div>
@@ -78,19 +81,44 @@ function Block({ title, children, onAdd, addLabel }) {
   );
 }
 
-/** Formulaire inline : type de filiation (+ couple parental pour un enfant). */
-function FiliationEditForm({ filiationId, filiationType, unionId, unions, onChanged, onDone }) {
+/** Formulaire inline : type de filiation, couple (enfant), et pour les liens datés
+ *  (adoption, famille d'accueil, reconnaissance, abandon) la date, le lieu et la preuve. */
+function FiliationEditForm({ treeId, childId, childName, filiationId, filiationType, unionId, unions, onChanged, onDone }) {
   const [type, setType] = useState(filiationType || 'biological');
   const [union, setUnion] = useState(unionId || '');
+  const [date, setDate] = useState('');
+  const [placeLabel, setPlaceLabel] = useState('');
+  const [proof, setProof] = useState(EMPTY_DATE_PROOF);
   const [busy, setBusy] = useState(false);
+  const needsEvent = filiationNeedsEvent(type);
+  const question = FILIATION_EVENT_QUESTION[FILIATION_EVENT_TYPE[type]];
+  const hasInfo = !!date || !!placeLabel.trim();
+  const proofMissing = needsEvent && hasInfo && !isDateProofValid(proof);
+
+  // Pré-remplit date et lieu s'il existe déjà un événement pour ce type.
+  useEffect(() => {
+    let alive = true;
+    if (!childId || !filiationNeedsEvent(type)) return undefined;
+    fetchFiliationEvent(childId, type)
+      .then((ev) => { if (alive && ev) { setDate(ev.date); setPlaceLabel(ev.placeLabel); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [childId, type]);
 
   async function save() {
+    if (proofMissing) {
+      pushErrorToast('Une preuve (acte ou informations familiales) est requise pour la date ou le lieu.');
+      return;
+    }
     setBusy(true);
     try {
       await updateFiliation(filiationId, {
         filiationType: type,
         unionId: unions ? (union || null) : undefined,
       });
+      if (needsEvent) {
+        await saveFiliationEvent(treeId, { childId, childName, filiationType: type, date, placeLabel, proof });
+      }
       onChanged?.();
       pushToast('Lien modifié.');
       onDone();
@@ -114,6 +142,16 @@ function FiliationEditForm({ filiationId, filiationType, unionId, unions, onChan
           ))}
         </select>
       )}
+      {needsEvent && (
+        <div className="space-y-2 rounded-lg border border-neutral-200 p-2 dark:border-neutral-700">
+          <p className="text-xs text-neutral-500">{question.charAt(0).toUpperCase() + question.slice(1)}</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date" />
+            <input className="field" placeholder="Lieu (ville, département…)" value={placeLabel} onChange={(e) => setPlaceLabel(e.target.value)} aria-label="Lieu" />
+          </div>
+          <DateProofInput value={proof} onChange={setProof} disabled={busy} message="Une preuve (acte ou informations familiales) est requise pour la date ou le lieu." />
+        </div>
+      )}
       <div className="flex gap-3 text-xs">
         <button onClick={save} disabled={busy} className="text-accent-600 hover:underline disabled:opacity-50">enregistrer</button>
         <button onClick={onDone} disabled={busy} className="text-neutral-400 hover:underline">annuler</button>
@@ -122,7 +160,7 @@ function FiliationEditForm({ filiationId, filiationType, unionId, unions, onChan
   );
 }
 
-function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
+function ParentsBlock({ individualId, individualName, treeId, parents, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [filiationType, setFiliationType] = useState('biological');
@@ -170,6 +208,9 @@ function ParentsBlock({ individualId, treeId, parents, canEdit, onChanged }) {
           </div>
           {canEdit && editingId === p.filiationId && (
             <FiliationEditForm
+              treeId={treeId}
+              childId={individualId}
+              childName={individualName}
               filiationId={p.filiationId}
               filiationType={p.filiationType}
               onChanged={onChanged}
@@ -336,6 +377,9 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
               </div>
               {canEdit && editingId === c.filiationId && (
                 <FiliationEditForm
+                  treeId={treeId}
+                  childId={c.individual?.id}
+                  childName={[c.individual?.firstNames, c.individual?.lastName].filter(Boolean).join(' ')}
                   filiationId={c.filiationId}
                   filiationType={c.filiationType}
                   unionId={group.union?.id || null}
