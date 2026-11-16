@@ -203,3 +203,16 @@ describe('chaîne des conjoints à gauche', () => {
     expect(x5('moi') - x5('a')).toBe(228);
   });
 });
+
+describe('famille du conjoint non affichée', () => {
+  it('les parents de la conjointe ne sont pas ajoutés à l\'arbre', () => {
+    const people6 = { moi: {}, ep: {}, gp1: {}, gp2: {} };
+    const unions6 = [{ id: 'uE', partnerIds: ['moi', 'ep'], status: 'ongoing', unionType: 'marriage' }];
+    const links6 = [{ parentId: 'gp1', childId: 'ep' }, { parentId: 'gp2', childId: 'ep' }];
+    const g6 = fakeGraph({ people: people6, unions: unions6, links: links6 });
+    const lv = computeLevels(g6, 'moi', { showSiblings: true });
+    expect(lv.has('ep')).toBe(true);
+    expect(lv.has('gp1')).toBe(false);
+    expect(lv.has('gp2')).toBe(false);
+  });
+});

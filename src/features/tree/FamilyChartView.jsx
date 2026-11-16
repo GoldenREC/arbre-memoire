@@ -57,11 +57,12 @@ export default function FamilyChartView({ onOpenIndividual }) {
             })}
             {arcs.map((a, i) => {
               const u = unionStyle(a.status, a.unionType);
-              const ym = Math.max(a.ay, a.by) + 26;
+              const ym = Math.max(a.ay, a.by) + 34;
+              const mx = (a.ax + a.bx) / 2;
               return (
                 <path
                   key={`a${i}`}
-                  d={`M ${a.ax} ${a.ay} C ${a.ax} ${ym}, ${a.bx} ${ym}, ${a.bx} ${a.by}`}
+                  d={`M ${a.ax} ${a.ay} Q ${mx} ${ym}, ${a.bx} ${a.by}`}
                   fill="none"
                   stroke={u.color}
                   strokeWidth={2.5}
@@ -85,7 +86,25 @@ export default function FamilyChartView({ onOpenIndividual }) {
             })}
           </svg>
           {nodes.map((n) => (
-            <div key={n.id} className="absolute" style={{ left: n.x - CARD_W / 2, top: n.y, width: CARD_W, height: CARD_H }}>
+            <div key={n.id} className="group absolute" style={{ left: n.x - CARD_W / 2, top: n.y, width: CARD_W, height: CARD_H }}>
+              <div className="absolute -top-6 left-1/2 flex -translate-x-1/2 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => setRootId(n.id)}
+                  className="rounded-md bg-white px-2 py-0.5 text-[11px] shadow-sm hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+                  title="Centrer l'arbre sur cette personne"
+                >
+                  Centrer
+                </button>
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => onOpenIndividual?.(n.id)}
+                  className="rounded-md bg-white px-2 py-0.5 text-[11px] shadow-sm hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+                  title="Ouvrir la fiche"
+                >
+                  Fiche
+                </button>
+              </div>
               <PersonCard
                 individual={graph.getIndividual(n.id)}
                 highlighted={n.id === rootId}

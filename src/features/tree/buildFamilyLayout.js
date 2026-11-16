@@ -21,11 +21,14 @@ const PAD = 40;
 /** Génération de chaque personne par rapport à la racine (racine = 0). */
 export function computeLevels(graph, rootId, { up = 6, down = 3, showSiblings = true } = {}) {
   const levels = new Map([[rootId, 0]]);
+  // Conjoints ajoutés pour l'affichage : leur famille d'origine (parents, frères et sœurs) n'est pas montrée.
+  const asSpouse = new Set();
   const queue = [rootId];
   while (queue.length) {
     const id = queue.shift();
     const level = levels.get(id);
-    if (level < up) {
+    const isSpouse = asSpouse.has(id);
+    if (!isSpouse && level < up) {
       for (const link of graph.getParents(id)) {
         if (!levels.has(link.parentId)) {
           levels.set(link.parentId, level + 1);
@@ -33,8 +36,9 @@ export function computeLevels(graph, rootId, { up = 6, down = 3, showSiblings = 
         }
       }
     }
-    // Les enfants d'un ancêtre sont ses frères et sœurs : ils ne sont ajoutés que sur demande.
-    if (level > -down && (level <= 0 || showSiblings)) {
+    // Descendants : un conjoint n'apporte que ses enfants communs avec la racine (niveau 0).
+    const canDescend = isSpouse ? level === 0 : level > -down && (level <= 0 || showSiblings);
+    if (canDescend && level > -down) {
       for (const childId of graph.getChildren(id)) {
         if (!levels.has(childId)) {
           levels.set(childId, level - 1);
@@ -42,9 +46,11 @@ export function computeLevels(graph, rootId, { up = 6, down = 3, showSiblings = 
         }
       }
     }
+    // Conjoints (y compris ceux des conjoints, pour la chaîne) : même niveau.
     for (const spouseId of graph.getSpouses(id)) {
       if (!levels.has(spouseId)) {
         levels.set(spouseId, level);
+        asSpouse.add(spouseId);
         queue.push(spouseId);
       }
     }
@@ -256,14 +262,17 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
         unionId: union.id,
         unionType: union.unionType || null,
         status: union.status || null,
-        ax: a.x + CARD_W / 2,
-        ay: a.y + CARD_H,
-        bx: b.x + CARD_W / 2,
-        by: b.y + CARD_H,
+        ...sideAnchors(a, b),
       });
     }
   }
 
+  // Point d'attache d'une union sur la carte : côté qui fait face à l'autre conjoint.
+  function sideAnchors(a, b) {
+    const midY = (n) => n.y + CARD_H / 2;
+    if (b.x > a.x) return { ax: a.x + CARD_W, ay: midY(a), bx: b.x, by: midY(b) };
+    return { ax: a.x, ay: midY(a), bx: b.x + CARD_W, by: midY(b) };
+  }
   const xs = nodes.map((n) => n.x);
   const ys = nodes.map((n) => n.y);
   const bounds = {
