@@ -6,6 +6,7 @@ const GEDCOM_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', '
 
 const FILIATION_TO_PEDI = {
   biological: null, // "birth" est la valeur par défaut, pas besoin de PEDI explicite
+  biological_unrecognized: null,
   adoption_plenary: 'adopted',
   adoption_simple: 'adopted',
   foster: 'foster',

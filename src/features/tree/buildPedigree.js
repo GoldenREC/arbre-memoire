@@ -13,15 +13,14 @@
  * explicitement la lignée pourra être ajouté depuis la fiche individu).
  */
 
+import { rankParentLinks } from '../../lib/filiation/rank.js';
+
 export function pickPedigreeParents(graph, individualId) {
   const links = graph.getParents(individualId);
   if (links.length === 0) return [null, null];
 
-  // Priorité aux filiations biologiques quand plusieurs sont connues.
-  const sorted = [...links].sort((a, b) => {
-    const score = (l) => (l.filiationType === 'biological' ? 0 : 1);
-    return score(a) - score(b);
-  });
+  // Le lien le plus fort (adoption plénière > biologique > simple > accueil/inconnu) passe en premier.
+  const sorted = rankParentLinks(links);
 
   const withSex = sorted.map((l) => ({ ...l, sex: graph.getIndividual(l.parentId)?.sex }));
   const father = withSex.find((p) => p.sex === 'M') || withSex[0] || null;

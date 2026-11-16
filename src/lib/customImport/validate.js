@@ -23,6 +23,7 @@ const UNION_STATUS_VALUES = ['ongoing', 'divorced', 'widowed', 'annulled', 'unkn
 const UNION_TYPE_VALUES = ['marriage', 'civil_union', 'cohabitation', 'unknown'];
 const FILIATION_TYPE_VALUES = [
   'biological',
+  'biological_unrecognized',
   'adoption_plenary',
   'adoption_simple',
   'foster',
