@@ -1,5 +1,23 @@
 import { useMemo } from 'react';
 import { useFamilyTree } from './FamilyTreeContext.jsx';
+
+/**
+ * Regroupe les liens parent → enfant : pour chaque enfant, une seule barre horizontale
+ * où arrivent les liens de ses parents (chacun garde sa couleur), puis une descente vers l'enfant.
+ */
+function childBuses(links) {
+  const byChild = new Map();
+  for (const l of links) {
+    if (!byChild.has(l.childId)) byChild.set(l.childId, { childId: l.childId, childX: l.x2, childY: l.y2, drops: [] });
+    byChild.get(l.childId).drops.push({ parentId: l.parentId, x: l.x1, fromY: l.y1 });
+  }
+  return [...byChild.values()].map((b) => {
+    const parentBottom = Math.max(...b.drops.map((d) => d.fromY));
+    const busY = (parentBottom + b.childY) / 2;
+    const xs = [...b.drops.map((d) => d.x), b.childX];
+    return { ...b, busY, minX: Math.min(...xs), maxX: Math.max(...xs) };
+  });
+}
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
 import PersonCard from './PersonCard.jsx';
@@ -74,20 +92,25 @@ export default function FamilyChartView({ onOpenIndividual }) {
                 />
               );
             })}
-            {links.map((l, i) => {
-              const style = linkStyle(graph, l.childId, [l.parentId]);
-              const ym = (l.y1 + l.y2) / 2;
-              return (
-                <path
-                  key={`l${i}`}
-                  d={`M ${l.x1} ${l.y1} C ${l.x1} ${ym}, ${l.x2} ${ym}, ${l.x2} ${l.y2}`}
-                  fill="none"
-                  stroke={style.color}
-                  strokeWidth={1.75}
-                  strokeDasharray={style.dash}
-                />
-              );
-            })}
+            {childBuses(links).map((bus, i) => (
+              <g key={`b${i}`}>
+                {bus.drops.map((d, j) => {
+                  const style = linkStyle(graph, bus.childId, [d.parentId]);
+                  return (
+                    <path
+                      key={`d${j}`}
+                      d={`M ${d.x} ${d.fromY} L ${d.x} ${bus.busY}`}
+                      fill="none"
+                      stroke={style.color}
+                      strokeWidth={1.75}
+                      strokeDasharray={style.dash}
+                    />
+                  );
+                })}
+                <path d={`M ${bus.minX} ${bus.busY} L ${bus.maxX} ${bus.busY}`} fill="none" stroke="#737373" strokeWidth={1.25} />
+                <path d={`M ${bus.childX} ${bus.busY} L ${bus.childX} ${bus.childY}`} fill="none" stroke="#737373" strokeWidth={1.25} />
+              </g>
+            ))}
           </svg>
           {nodes.map((n) => (
             <div
