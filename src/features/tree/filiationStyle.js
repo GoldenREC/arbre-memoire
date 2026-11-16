@@ -15,3 +15,10 @@ export function linkStyle(graph, childId, parentIds) {
   const link = graph.getParents(childId).find((l) => parentIds.includes(l.parentId));
   return FILIATION_STYLE[link?.filiationType] || FILIATION_STYLE.unknown;
 }
+
+/** Trait d'union entre deux conjoints : marié ou en couple (plein), concubinage (tirets), divorcé ou séparé (tirets ambre). */
+export function unionStyle(status, unionType) {
+  if (status === 'divorced' || status === 'separated') return { color: '#b45309', dash: '8 4' };
+  if (unionType === 'cohabitation') return { color: '#737373', dash: '4 3' };
+  return { color: '#525252' };
+}

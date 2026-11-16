@@ -94,9 +94,16 @@ describe('buildFamilyLayout', () => {
     expect(Math.abs(x('pere') - center)).toBeLessThan(400);
   });
 
-  it('renvoie un lien par enfant vers ses parents', () => {
-    const childIds = layout.links.map((l) => l.childId);
-    expect(childIds).toEqual(expect.arrayContaining(['moi', 'toi2', 'enfant', 'pere', 'tante']));
+  it('relie chaque enfant à chacun de ses vrais parents, et à aucun autre', () => {
+    const parentsOfChild = (id) => layout.links.filter((l) => l.childId === id).map((l) => l.parentId).sort();
+    expect(parentsOfChild('moi')).toEqual(['mere', 'pere']);
+    expect(parentsOfChild('tante')).toEqual(['g1', 'g2']);
+    expect(parentsOfChild('enfant')).toEqual(['epouse', 'moi']);
+  });
+
+  it('ne renvoie une union que si elle existe entre deux personnes voisines', () => {
+    const pairs = layout.couples.map((c) => c.unionId).sort();
+    expect(pairs).toEqual(['uG', 'uM', 'uP']);
   });
 });
 
