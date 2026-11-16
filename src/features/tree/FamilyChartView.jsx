@@ -1,25 +1,9 @@
 import { useMemo } from 'react';
 import { useFamilyTree } from './FamilyTreeContext.jsx';
 
-/**
- * Regroupe les liens parent → enfant : pour chaque enfant, une seule barre horizontale
- * où arrivent les liens de ses parents (chacun garde sa couleur), puis une descente vers l'enfant.
- */
-function childBuses(links) {
-  const byChild = new Map();
-  for (const l of links) {
-    if (!byChild.has(l.childId)) byChild.set(l.childId, { childId: l.childId, childX: l.x2, childY: l.y2, drops: [] });
-    byChild.get(l.childId).drops.push({ parentId: l.parentId, x: l.x1, fromY: l.y1 });
-  }
-  return [...byChild.values()].map((b) => {
-    const parentBottom = Math.max(...b.drops.map((d) => d.fromY));
-    const busY = (parentBottom + b.childY) / 2;
-    const xs = [...b.drops.map((d) => d.x), b.childX];
-    return { ...b, busY, minX: Math.min(...xs), maxX: Math.max(...xs) };
-  });
-}
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
+import { childBuses } from './familyBuses.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
 import TreeLegend from './TreeLegend.jsx';
