@@ -31,12 +31,13 @@ function milestoneFromEvent(e) {
 export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, onCancel, initialStatus }) {
   const marriageEvent = (unionEvents || []).find((e) => e.eventType === 'marriage') || null;
   const divorceEvent = (unionEvents || []).find((e) => e.eventType === 'divorce') || null;
+  const separationEvent = (unionEvents || []).find((e) => e.eventType === 'separation') || null;
 
   const [relationshipStatus, setRelationshipStatus] = useState(() => initialStatus || relationshipStatusFromUnion(union));
   // Preuves : `existingProofs` = jalons qui en ont déjà une en base ;
   // `proofs` = celles saisies ici pour les jalons qui n'en ont pas encore.
-  const [existingProofs, setExistingProofs] = useState({ union_start: false, marriage: false, divorce: false });
-  const [proofs, setProofs] = useState({ union_start: EMPTY_DATE_PROOF, marriage: EMPTY_DATE_PROOF, divorce: EMPTY_DATE_PROOF });
+  const [existingProofs, setExistingProofs] = useState({ union_start: false, marriage: false, divorce: false, separation: false });
+  const [proofs, setProofs] = useState({ union_start: EMPTY_DATE_PROOF, marriage: EMPTY_DATE_PROOF, divorce: EMPTY_DATE_PROOF, separation: EMPTY_DATE_PROOF });
   const [start, setStart] = useState({
     date: union?.startDate || '',
     datePrecision: union?.startDatePrecision || 'unknown',
@@ -44,6 +45,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
   });
   const [marriage, setMarriage] = useState(() => milestoneFromEvent(marriageEvent));
   const [divorce, setDivorce] = useState(() => milestoneFromEvent(divorceEvent));
+  const [separation, setSeparation] = useState(() => milestoneFromEvent(separationEvent));
   const [loadingPlaces, setLoadingPlaces] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -52,10 +54,11 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
     async function loadPlaces() {
       setLoadingPlaces(true);
       try {
-        const [startPlace, marriagePlace, divorcePlace, proofState] = await Promise.all([
+        const [startPlace, marriagePlace, divorcePlace, separationPlace, proofState] = await Promise.all([
           fetchStructuredPlace(union?.placeId),
           fetchStructuredPlace(marriageEvent?.placeId),
           fetchStructuredPlace(divorceEvent?.placeId),
+          fetchStructuredPlace(separationEvent?.placeId),
           fetchUnionMilestoneProofs(union?.id),
         ]);
         if (cancelled) return;
@@ -63,6 +66,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
         setStart((s) => ({ ...s, place: startPlace || EMPTY_PLACE }));
         setMarriage((m) => ({ ...m, place: marriagePlace || EMPTY_PLACE }));
         setDivorce((d) => ({ ...d, place: divorcePlace || EMPTY_PLACE }));
+        setSeparation((x) => ({ ...x, place: separationPlace || EMPTY_PLACE }));
       } catch (err) {
         pushErrorToast(err.message);
       } finally {
@@ -75,7 +79,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
   }, [union?.id]);
 
   // Jalons pour lesquels une preuve reste à fournir avant d'enregistrer.
-  const missingProofs = milestonesRequiringProof(relationshipStatus, { start, marriage, divorce }).filter((key) => !existingProofs[key]);
+  const missingProofs = milestonesRequiringProof(relationshipStatus, { start, marriage, divorce, separation }).filter((key) => !existingProofs[key]);
   const proofsValid = missingProofs.every((key) => isDateProofValid(proofs[key]));
 
   async function handleSave() {
@@ -86,7 +90,7 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
     setSaving(true);
     try {
       await saveUnionMilestones(treeId, union.id, {
-        relationshipStatus, start, marriage, divorce,
+        relationshipStatus, start, marriage, divorce, separation,
         proofs: Object.fromEntries(missingProofs.map((key) => [key, proofs[key]])),
       });
       pushToast('Union enregistrée.');
@@ -127,6 +131,10 @@ export default function UnionStatusForm({ treeId, union, unionEvents, onSaved, o
 
       {relationshipStatus === 'divorced' && (
         <Milestone label="Divorce" value={divorce} onChange={setDivorce} loadingPlaces={loadingPlaces} {...proofProps('divorce')} />
+      )}
+
+      {relationshipStatus === 'separated' && (
+        <Milestone label="Séparation" value={separation} onChange={setSeparation} loadingPlaces={loadingPlaces} {...proofProps('separation')} />
       )}
       </div>
 

@@ -99,13 +99,16 @@ async function ensureUnionMilestoneEvent(treeId, unionId, eventType, { date, dat
   }
 }
 
-export const MILESTONE_LABELS = { union_start: 'Mise en couple', marriage: 'Mariage', divorce: 'Divorce' };
+export const MILESTONE_LABELS = { union_start: 'Mise en couple', marriage: 'Mariage', divorce: 'Divorce', separation: 'Séparation' };
+
+// Jalons sans preuve officielle possible (aucun document ne date une mise en couple ou une séparation).
+const PROOF_EXEMPT = ['union_start', 'separation'];
 
 const DEFINING_MILESTONES = {
   couple: ['union_start'],
   married: ['marriage'],
   divorced: ['marriage', 'divorce'],
-  separated: ['union_start'],
+  separated: ['union_start', 'separation'],
 };
 
 function milestoneHasContent(m) {
@@ -119,10 +122,15 @@ function milestoneHasContent(m) {
  * date connue, plus tout autre jalon affiché pour lequel une date ou un
  * lieu est renseigné. Une union ne s'enregistre donc jamais sans preuve.
  */
-export function milestonesRequiringProof(relationshipStatus, { start, marriage, divorce } = {}) {
+export function milestonesRequiringProof(relationshipStatus, { start, marriage, divorce, separation } = {}) {
   const defining = DEFINING_MILESTONES[relationshipStatus] || DEFINING_MILESTONES.couple;
-  const visible = { union_start: start, ...(relationshipStatus !== 'couple' ? { marriage } : {}), ...(relationshipStatus === 'divorced' ? { divorce } : {}) };
-  return Object.keys(visible).filter((key) => defining.includes(key) || milestoneHasContent(visible[key]));
+  const visible = {
+    union_start: start,
+    ...(relationshipStatus !== 'couple' ? { marriage } : {}),
+    ...(relationshipStatus === 'divorced' ? { divorce } : {}),
+    ...(relationshipStatus === 'separated' ? { separation } : {}),
+  };
+  return Object.keys(visible).filter((key) => !PROOF_EXEMPT.includes(key) && (defining.includes(key) || milestoneHasContent(visible[key])));
 }
 
 /** "Prénom Nom & Prénom Nom" des conjoints d'une union, pour nommer ses sources ('' si introuvables). */
@@ -170,7 +178,7 @@ export async function fetchUnionMilestoneProofs(unionId) {
  * format DateProofInput — rattaché à l'événement du jalon par le même
  * chemin que les preuves de naissance/décès (attachDateProof).
  */
-export async function saveUnionMilestones(treeId, unionId, { relationshipStatus, start, marriage, divorce, proofs = {} }) {
+export async function saveUnionMilestones(treeId, unionId, { relationshipStatus, start, marriage, divorce, separation, proofs = {} }) {
   const mapping = STATUS_TO_UNION_COLUMNS[relationshipStatus] || STATUS_TO_UNION_COLUMNS.couple;
   const startPlaceId = isPlaceEmpty(start?.place) ? null : await findOrCreateStructuredPlace(treeId, start.place);
   const defining = DEFINING_MILESTONES[relationshipStatus] || DEFINING_MILESTONES.couple;
@@ -183,8 +191,8 @@ export async function saveUnionMilestones(treeId, unionId, { relationshipStatus,
       start_date: start?.date || null,
       start_date_precision: start?.datePrecision || 'unknown',
       place_id: startPlaceId,
-      end_date: relationshipStatus === 'divorced' ? divorce?.date || null : null,
-      end_date_precision: relationshipStatus === 'divorced' ? divorce?.datePrecision || 'unknown' : 'unknown',
+      end_date: relationshipStatus === 'divorced' ? divorce?.date || null : relationshipStatus === 'separated' ? separation?.date || null : null,
+      end_date_precision: relationshipStatus === 'divorced' ? divorce?.datePrecision || 'unknown' : relationshipStatus === 'separated' ? separation?.datePrecision || 'unknown' : 'unknown',
     })
     .eq('id', unionId);
   if (error) throw error;
@@ -193,6 +201,7 @@ export async function saveUnionMilestones(treeId, unionId, { relationshipStatus,
     union_start: start,
     marriage: relationshipStatus === 'couple' ? null : marriage,
     divorce: relationshipStatus === 'divorced' ? divorce : null,
+    separation: relationshipStatus === 'separated' ? separation : null,
   };
   for (const [eventType, milestone] of Object.entries(milestones)) {
     await ensureUnionMilestoneEvent(treeId, unionId, eventType, milestone || {}, { keepIfEmpty: !!milestone && defining.includes(eventType) });
