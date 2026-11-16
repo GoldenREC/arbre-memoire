@@ -1,3 +1,5 @@
+import { filiationRank } from '../../lib/filiation/rank.js';
+
 /** Style des liens enfant/parent selon le type de filiation (couleur, tirets). */
 export const FILIATION_STYLE = {
   biological: { color: '#15803d' },
@@ -10,10 +12,14 @@ export const FILIATION_STYLE = {
   unknown: { color: '#dc2626', dash: '2 3' },
 };
 
-/** Lien le plus fort d'un enfant vers un de ses parents (type de filiation). */
+/**
+ * Style du lien entre un enfant et un parent : on garde le lien le plus fort
+ * (même règle que la fiche), pas le premier trouvé.
+ */
 export function linkStyle(graph, childId, parentIds) {
-  const link = graph.getParents(childId).find((l) => parentIds.includes(l.parentId));
-  return FILIATION_STYLE[link?.filiationType] || FILIATION_STYLE.unknown;
+  const rows = (graph.parentsOf?.get(childId) || graph.getParents(childId)).filter((l) => parentIds.includes(l.parentId));
+  const best = rows.reduce((b, l) => (!b || filiationRank(l.filiationType) > filiationRank(b.filiationType) ? l : b), null);
+  return FILIATION_STYLE[best?.filiationType] || FILIATION_STYLE.unknown;
 }
 
 /** Trait d'union entre deux conjoints : marié ou en couple (plein), concubinage (tirets), divorcé ou séparé (tirets ambre). */
