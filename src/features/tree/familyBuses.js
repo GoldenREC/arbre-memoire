@@ -55,7 +55,7 @@ export function linkPaths(links, graph, reservedYs = []) {
       kind: 'single',
       childId: l.childId,
       parentId: l.parentId,
-      busKey: `s:${l.parentId}|${graph?.parentsOf?.get(l.childId)?.find((r) => r.parentId === l.parentId)?.filiationType}`,
+      busKey: `s:${graph?.parentsOf?.get(l.childId)?.find((r) => r.parentId === l.parentId)?.filiationType}`,
       group: `${Math.round(l.y1)}-${Math.round(l.y2)}`,
       x1: l.x1,
       x2: l.x2,

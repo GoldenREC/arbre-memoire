@@ -11,7 +11,13 @@ describe('linkPaths', () => {
   });
 
   it('deux liens dans la même gouttière ont des voies horizontales différentes', () => {
-    const paths = linkPaths([link('p1', 'c1', 100, 150), link('p2', 'c2', 400, 500)]);
+    const graph = {
+      parentsOf: new Map([
+        ['c1', [{ parentId: 'p1', filiationType: 'biological' }]],
+        ['c2', [{ parentId: 'p2', filiationType: 'adoption_plenary' }]],
+      ]),
+    };
+    const paths = linkPaths([link('p1', 'c1', 100, 150), link('p2', 'c2', 400, 500)], graph);
     const laneYs = paths.map((p) => Number(p.d.split(' ')[5]));
     expect(new Set(laneYs).size).toBe(2);
   });
