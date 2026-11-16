@@ -35,7 +35,7 @@ export default function FamilyTreeContainer() {
 }
 
 function FamilyTreeExplorer() {
-  const { loading, error, graph, rootId, setRootId, generations, setGenerations, orientation, setOrientation } = useFamilyTree();
+  const { loading, error, graph, rootId, setRootId, generations, setGenerations, orientation, setOrientation, goBack, goHome, canGoBack, canGoHome } = useFamilyTree();
   const [tab, setTab] = useState('ascendance');
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
@@ -102,8 +102,24 @@ function FamilyTreeExplorer() {
           <span className="w-4 text-center">{generations}</span>
         </label>
 
+        <div className="flex items-center gap-1 text-xs">
+          <button onClick={goBack} disabled={!canGoBack} title="Revenir à la personne précédente" className="rounded bg-neutral-100 px-2 py-1 text-neutral-600 disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-300">
+            ← Retour
+          </button>
+          <button onClick={goHome} disabled={!canGoHome} title="Revenir à la fiche racine par défaut" className="rounded bg-neutral-100 px-2 py-1 text-neutral-600 disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-300">
+            ⌂ Fiche racine
+          </button>
+        </div>
+
         {tab === 'ascendance' && (
           <div className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+            <button
+              onClick={() => setOrientation('bottomUp')}
+              title="Racine en bas, parents au-dessus"
+              className={`rounded px-2 py-1 ${orientation === 'bottomUp' ? 'bg-accent-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
+            >
+              ⇡ Racine en bas
+            </button>
             <button
               onClick={() => setOrientation('horizontal')}
               title="Orientation gauche → droite"
