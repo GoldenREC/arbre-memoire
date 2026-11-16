@@ -99,22 +99,32 @@ export default function FamilyChartView({ onOpenIndividual }) {
               }}
               title="Survole une personne pour voir ses liens parentaux, double-clic pour la centrer"
             >
-              <div className="absolute -top-6 left-1/2 flex -translate-x-1/2 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <div className="absolute -top-2 right-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <button
+                  type="button"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => setRootId(n.id)}
-                  className="rounded-md bg-white px-2 py-0.5 text-[11px] shadow-sm hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700"
                   title="Centrer l'arbre sur cette personne"
+                  aria-label="Centrer l'arbre sur cette personne"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-neutral-700 shadow ring-1 ring-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-700"
                 >
-                  Centrer
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <circle cx="12" cy="12" r="8" />
+                    <circle cx="12" cy="12" r="2" />
+                  </svg>
                 </button>
                 <button
+                  type="button"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => onOpenIndividual?.(n.id)}
-                  className="rounded-md bg-white px-2 py-0.5 text-[11px] shadow-sm hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700"
                   title="Ouvrir la fiche"
+                  aria-label="Ouvrir la fiche"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-neutral-700 shadow ring-1 ring-neutral-200 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-700"
                 >
-                  Fiche
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="16.5" y1="16.5" x2="21" y2="21" />
+                  </svg>
                 </button>
               </div>
               <PersonCard individual={graph.getIndividual(n.id)} highlighted={n.id === rootId} />
