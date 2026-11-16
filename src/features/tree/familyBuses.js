@@ -18,6 +18,7 @@ export function linkPaths(links, graph) {
     const { p, q } = t;
     items.push({
       kind: 'trunk',
+      coupleKey: `${[p.parentId, q.parentId].sort().join('|')}|${t.type}`,
       childId: t.childId,
       parentId: p.parentId,
       parentIds: [p.parentId, q.parentId],
@@ -65,26 +66,40 @@ export function linkPaths(links, graph) {
     if (!byGap.has(it.group)) byGap.set(it.group, []);
     byGap.get(it.group).push(it);
   }
-  // Hauteur souhaitée de chaque voie, dans sa gouttière.
-  const wanted = [];
+  // Unités de tracé : un lien seul, ou un bus partagé par tous les enfants d'un même couple
+  // (même type de filiation). Chaque unité a une seule horizontale, donc un seul niveau.
+  const entries = [];
   for (const group of byGap.values()) {
-    group.sort((a, b) => a.x2 - b.x2 || a.x1 - b.x1);
-    group.forEach((it, lane) => {
-      const midY = (it.y1 + it.y2) / 2;
-      wanted.push({ it, y: midY + (lane - (group.length - 1) / 2) * LANE_STEP });
+    const shared = new Map();
+    const units = [];
+    for (const it of group) {
+      if (it.kind === 'trunk') {
+        if (!shared.has(it.coupleKey)) {
+          shared.set(it.coupleKey, []);
+          units.push(shared.get(it.coupleKey));
+        }
+        shared.get(it.coupleKey).push(it);
+      } else {
+        units.push([it]);
+      }
+    }
+    units.sort((a, b) => a[0].x2 - b[0].x2 || a[0].x1 - b[0].x1);
+    units.forEach((items, lane) => {
+      const midY = (items[0].y1 + items[0].y2) / 2;
+      entries.push({ items, y: midY + (lane - (units.length - 1) / 2) * LANE_STEP });
     });
   }
   // Séparation globale : deux horizontales, même issues de gouttières différentes,
   // ne peuvent pas être plus proches que LANE_STEP.
-  wanted.sort((a, b) => a.y - b.y || a.it.x1 - b.it.x1);
+  entries.sort((a, b) => a.y - b.y || a.items[0].x1 - b.items[0].x1);
   let prev = -Infinity;
-  for (const w of wanted) {
-    w.y = Math.max(w.y, prev + LANE_STEP);
-    prev = w.y;
+  for (const e of entries) {
+    e.y = Math.max(e.y, prev + LANE_STEP);
+    prev = e.y;
   }
 
   const paths = [];
-  for (const { it, y: laneY } of wanted) {
+  for (const { items, y: laneY } of entries) for (const it of items) {
     if (it.kind === 'trunk') {
       const { p, q } = it;
       paths.push({
@@ -129,7 +144,7 @@ function mergeCoupleTrunks(links, graph) {
         if (!isCouple || p.y1 !== q.y1) continue;
         used.add(p.parentId);
         used.add(q.parentId);
-        out.push({ childId, parents: [p.parentId, q.parentId], p, q });
+        out.push({ childId, parents: [p.parentId, q.parentId], p, q, type: typeOf(p) });
       }
     }
   }
