@@ -9,7 +9,24 @@ const LANE_STEP = 11;
 const ARRIVAL_STEP = 14;
 const TRUNK_DROP = 14;
 
-export function linkPaths(links, graph) {
+/** Hauteur de la voie horizontale d'un arc d'union (même formule que le tracé de l'arc). */
+const ARC_CARD_H = 64;
+export function arcBus(a) {
+  return Math.max(a.ay, a.by) + ARC_CARD_H / 2 + 22 + a.lane * 12;
+}
+
+/** Écarte une hauteur de toute voie réservée (arcs d'union) pour qu'aucun trait ne s'y confonde. */
+function avoidReserved(y, reservedYs) {
+  let v = y;
+  for (let k = 0; k < 10; k++) {
+    const hit = reservedYs.find((r) => Math.abs(v - r) < LANE_STEP);
+    if (hit === undefined) break;
+    v = hit + (v >= hit ? LANE_STEP : -LANE_STEP);
+  }
+  return v;
+}
+
+export function linkPaths(links, graph, reservedYs = []) {
   const items = [];
   const trunks = mergeCoupleTrunks(links, graph);
   const usedKeys = new Set(trunks.flatMap((t) => t.parents.map((pid) => `${t.childId}|${pid}`)));
@@ -91,10 +108,11 @@ export function linkPaths(links, graph) {
   }
   // Séparation globale : deux horizontales, même issues de gouttières différentes,
   // ne peuvent pas être plus proches que LANE_STEP.
+  for (const e of entries) e.y = avoidReserved(e.y, reservedYs);
   entries.sort((a, b) => a.y - b.y || a.items[0].x1 - b.items[0].x1);
   let prev = -Infinity;
   for (const e of entries) {
-    e.y = Math.max(e.y, prev + LANE_STEP);
+    e.y = avoidReserved(Math.max(e.y, prev + LANE_STEP), reservedYs);
     prev = e.y;
   }
 
