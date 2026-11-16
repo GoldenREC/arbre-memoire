@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabaseClient.js';
 import { attachDateProof } from './actsMutations.js';
-import { findOrCreatePlace } from './individualMutations.js';
+import { findOrCreateStructuredPlace } from './individualMutations.js';
+import { isPlaceEmpty } from '../../lib/utils/placeLabel.js';
 
 /** Type de lien → type d'événement qui porte la date et le lieu sur l'enfant. */
 export const FILIATION_EVENT_TYPE = {
@@ -37,14 +38,15 @@ export function filiationNeedsEvent(type) {
  * attachDateProof, comme pour la naissance. Renvoie l'id de l'événement, ou
  * null s'il n'y a ni date ni lieu.
  */
-export async function saveFiliationEvent(treeId, { filiationId, eventId, childId, childName, filiationType, date, placeLabel, proof }) {
+export async function saveFiliationEvent(treeId, { filiationId, eventId, childId, childName, filiationType, date, datePrecision, place, proof }) {
   const eventType = FILIATION_EVENT_TYPE[filiationType];
   const hasDate = !!date;
-  const hasPlace = !!placeLabel?.trim();
+  const hasPlace = !isPlaceEmpty(place);
   if (!eventType || (!hasDate && !hasPlace)) return null;
 
-  const placeId = hasPlace ? await findOrCreatePlace(treeId, placeLabel) : null;
-  const datePatch = { event_date: date || null, date_precision: hasDate ? 'exact' : 'unknown', place_id: placeId };
+  const placeId = hasPlace ? await findOrCreateStructuredPlace(treeId, place) : null;
+  const precision = hasDate ? datePrecision || 'exact' : 'unknown';
+  const datePatch = { event_date: date || null, date_precision: precision, place_id: placeId };
   const title = `${FILIATION_EVENT_LABEL[eventType]} — ${childName || ''}`.trim();
 
   let id = eventId;
@@ -76,7 +78,7 @@ export async function saveFiliationEvent(treeId, { filiationId, eventId, childId
     individualId: childId,
     eventType,
     eventId: id,
-    snapshot: { date: date || null, datePrecision: hasDate ? 'exact' : 'unknown', placeId },
+    snapshot: { date: date || null, datePrecision: precision, placeId },
     title,
     proof,
   });
