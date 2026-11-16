@@ -14,6 +14,7 @@ import { RELATIONSHIP_STATUS_LABELS, relationshipStatusFromUnion } from './union
 import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
 import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
 import { fetchStructuredPlace } from './individualMutations.js';
+import { rankParentLinks } from '../../lib/filiation/rank.js';
 
 export const FILIATION_LABELS = {
   adoption_plenary: 'Adoption plénière',
@@ -200,7 +201,7 @@ function ParentsBlock({ individualId, individualName, treeId, parents, canEdit, 
   return (
     <Block title="Parents" onAdd={canEdit ? () => setAdding((v) => !v) : null} addLabel={adding ? 'Annuler' : '+ Ajouter un parent'}>
       {parents.length === 0 && <p className="text-sm text-neutral-400">Aucun parent connu.</p>}
-      {parents.map((p) => (
+      {rankParentLinks(parents).map((p) => (
         <div key={p.filiationId}>
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-1.5">
