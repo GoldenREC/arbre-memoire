@@ -5,7 +5,7 @@ export const FILIATION_STYLE = {
   biological: { color: '#15803d' },
   adoption_plenary: { color: '#2563eb', dash: '6 4' },
   adoption_simple: { color: '#7c3aed', dash: '6 4' },
-  foster: { color: '#ea580c', dash: '6 4' },
+  foster: { color: '#0f766e', dash: '10 3 2 3' },
   late_recognition: { color: '#ca8a04', dash: '6 4' },
   abandoned: { color: '#dc2626', dash: '2 3' },
   biological_unrecognized: { color: '#dc2626', dash: '2 3' },

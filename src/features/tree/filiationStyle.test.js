@@ -18,3 +18,10 @@ describe('linkStyle', () => {
     expect(linkStyle(graph, 'c', ['p'])).toBe(FILIATION_STYLE.biological);
   });
 });
+
+describe('couleurs distinctes', () => {
+  it('la famille d\'accueil n\'a pas la couleur d\'une union séparée ou divorcée', () => {
+    expect(FILIATION_STYLE.foster.color).not.toBe('#b45309');
+    expect(FILIATION_STYLE.foster.dash).not.toBe('8 4');
+  });
+});
