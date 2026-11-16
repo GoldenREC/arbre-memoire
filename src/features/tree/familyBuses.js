@@ -5,7 +5,7 @@
  * Les voies et les points d'arrivée sont distincts pour tous les traits d'une même gouttière
  * (y compris le trait commun de deux parents), pour que deux liens ne se confondent jamais.
  */
-const LANE_STEP = 11;
+const LANE_STEP = 15;
 const ARRIVAL_STEP = 14;
 const TRUNK_DROP = 14;
 
