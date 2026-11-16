@@ -17,16 +17,16 @@ export function linkPaths(links, graph) {
   }
   const paths = [];
   const merged = mergeCoupleTrunks(links, graph);
-  const trunkKeys = new Set(merged.map((m) => `${m.childId}`));
+  const usedKeys = new Set(merged.flatMap((m) => m.parents.map((pid) => `${m.childId}|${pid}`)));
   for (const m of merged) paths.push(m.path);
-  const rest = links.filter((l) => !trunkKeys.has(l.childId) || !merged.some((m) => m.childId === l.childId && m.parents.includes(l.parentId)));
-  byGap.clear();
+  const rest = links.filter((l) => !usedKeys.has(`${l.childId}|${l.parentId}`));
+  const byGapRest = new Map();
   for (const l of rest) {
     const key = `${Math.round(l.y1)}-${Math.round(l.y2)}`;
-    if (!byGap.has(key)) byGap.set(key, []);
-    byGap.get(key).push(l);
+    if (!byGapRest.has(key)) byGapRest.set(key, []);
+    byGapRest.get(key).push(l);
   }
-  for (const group of byGap.values()) {
+  for (const group of byGapRest.values()) {
     group.sort((p, q) => p.x2 - q.x2 || p.x1 - q.x1);
     // Points d'arrivée : plusieurs parents d'un même enfant arrivent à des endroits différents du haut de la carte.
     const perChild = new Map();
@@ -62,24 +62,32 @@ function mergeCoupleTrunks(links, graph) {
     byChild.get(l.childId).push(l);
   }
   for (const [childId, list] of byChild) {
-    if (list.length !== 2) continue;
-    const [p, q] = list;
-    const typeOf = (l) => graph.parentsOf?.get(childId)?.find((r) => r.parentId === l.parentId)?.filiationType;
-    if (!typeOf(p) || typeOf(p) !== typeOf(q)) continue;
-    const isCouple = graph.getUnions(p.parentId).some((u) => (u.partnerIds || []).includes(q.parentId));
-    if (!isCouple || p.y1 !== q.y1) continue;
-    const midX = (p.x1 + q.x1) / 2;
-    const midY = (p.y1 + p.y2) / 2;
-    out.push({
-      childId,
-      parents: [p.parentId, q.parentId],
-      path: {
-        parentId: p.parentId,
-        childId,
-        parentIds: [p.parentId, q.parentId],
-        d: `M ${midX} ${p.y1} L ${midX} ${midY} L ${p.x2} ${midY} L ${p.x2} ${p.y2}`,
-      },
-    });
+    const used = new Set();
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const p = list[i];
+        const q = list[j];
+        if (used.has(p.parentId) || used.has(q.parentId)) continue;
+        const typeOf = (l) => graph.parentsOf?.get(childId)?.find((r) => r.parentId === l.parentId)?.filiationType;
+        if (!typeOf(p) || typeOf(p) !== typeOf(q)) continue;
+        const isCouple = graph.getUnions(p.parentId).some((u) => (u.partnerIds || []).includes(q.parentId));
+        if (!isCouple || p.y1 !== q.y1) continue;
+        used.add(p.parentId);
+        used.add(q.parentId);
+        const midX = (p.x1 + q.x1) / 2;
+        const midY = (p.y1 + p.y2) / 2;
+        out.push({
+          childId,
+          parents: [p.parentId, q.parentId],
+          path: {
+            parentId: p.parentId,
+            childId,
+            parentIds: [p.parentId, q.parentId],
+            d: `M ${midX} ${p.y1} L ${midX} ${midY} L ${p.x2} ${midY} L ${p.x2} ${p.y2}`,
+          },
+        });
+      }
+    }
   }
   return out;
 }
