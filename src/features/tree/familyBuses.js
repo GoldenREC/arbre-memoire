@@ -55,6 +55,7 @@ export function linkPaths(links, graph, reservedYs = []) {
       kind: 'single',
       childId: l.childId,
       parentId: l.parentId,
+      busKey: `s:${l.parentId}|${graph?.parentsOf?.get(l.childId)?.find((r) => r.parentId === l.parentId)?.filiationType}`,
       group: `${Math.round(l.y1)}-${Math.round(l.y2)}`,
       x1: l.x1,
       x2: l.x2,
@@ -97,7 +98,12 @@ export function linkPaths(links, graph, reservedYs = []) {
         }
         shared.get(it.coupleKey).push(it);
       } else {
-        units.push([it]);
+        // Un même parent, un même type de filiation : un seul bus pour tous ses enfants.
+        if (!shared.has(it.busKey)) {
+          shared.set(it.busKey, []);
+          units.push(shared.get(it.busKey));
+        }
+        shared.get(it.busKey).push(it);
       }
     }
     units.sort((a, b) => a[0].x2 - b[0].x2 || a[0].x1 - b[0].x1);
