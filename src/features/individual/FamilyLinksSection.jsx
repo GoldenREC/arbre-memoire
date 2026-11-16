@@ -11,13 +11,13 @@ import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../compon
 import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
 
 export const FILIATION_LABELS = {
-  biological: 'Biologique (reconnu)',
-  biological_unrecognized: 'Biologique non reconnu',
   adoption_plenary: 'Adoption plénière',
-  adoption_simple: 'Adoption simple',
-  foster: "Famille d'accueil",
+  biological: 'Biologique déclaré(e)',
   late_recognition: 'Reconnaissance tardive',
-  abandoned: 'Enfant non déclaré / abandonné',
+  adoption_simple: 'Adoption simple',
+  biological_unrecognized: 'Biologique non déclaré(e)',
+  abandoned: 'Abandonné(e)',
+  foster: "Famille d'accueil",
   unknown: 'Inconnu',
 };
 
