@@ -8,7 +8,7 @@ import { pushToast, pushErrorToast } from '../../store/useToastStore.js';
 import UnionStatusForm from './UnionStatusForm.jsx';
 import { RELATIONSHIP_STATUS_LABELS, relationshipStatusFromUnion } from './unionMutations.js';
 import DateProofInput, { EMPTY_DATE_PROOF, isDateProofValid } from '../../components/ui/DateProofInput.jsx';
-import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, fetchFiliationEvent, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
+import { FILIATION_EVENT_QUESTION, FILIATION_EVENT_TYPE, filiationNeedsEvent, saveFiliationEvent } from './filiationEvents.js';
 
 export const FILIATION_LABELS = {
   biological: 'Biologique',
@@ -81,29 +81,27 @@ function Block({ title, children, onAdd, addLabel }) {
   );
 }
 
+/** « · 12/03/2001 · Marseille » après un lien daté ; rien pour un lien sans événement. */
+function EventInfo({ event }) {
+  if (!event || (!event.date && !event.placeLabel)) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(event.date || '');
+  const date = m ? `${m[3]}/${m[2]}/${m[1]}` : event.date;
+  return <span className="text-xs text-neutral-500">{[date, event.placeLabel].filter(Boolean).map((t) => ` · ${t}`).join('')}</span>;
+}
+
 /** Formulaire inline : type de filiation, couple (enfant), et pour les liens datés
  *  (adoption, famille d'accueil, reconnaissance, abandon) la date, le lieu et la preuve. */
-function FiliationEditForm({ treeId, childId, childName, filiationId, filiationType, unionId, unions, onChanged, onDone }) {
+function FiliationEditForm({ treeId, childId, childName, filiationId, eventId, eventDate, eventPlace, filiationType, unionId, unions, onChanged, onDone }) {
   const [type, setType] = useState(filiationType || 'biological');
   const [union, setUnion] = useState(unionId || '');
-  const [date, setDate] = useState('');
-  const [placeLabel, setPlaceLabel] = useState('');
+  const [date, setDate] = useState(eventDate || '');
+  const [placeLabel, setPlaceLabel] = useState(eventPlace || '');
   const [proof, setProof] = useState(EMPTY_DATE_PROOF);
   const [busy, setBusy] = useState(false);
   const needsEvent = filiationNeedsEvent(type);
   const question = FILIATION_EVENT_QUESTION[FILIATION_EVENT_TYPE[type]];
   const hasInfo = !!date || !!placeLabel.trim();
   const proofMissing = needsEvent && hasInfo && !isDateProofValid(proof);
-
-  // Pré-remplit date et lieu s'il existe déjà un événement pour ce type.
-  useEffect(() => {
-    let alive = true;
-    if (!childId || !filiationNeedsEvent(type)) return undefined;
-    fetchFiliationEvent(childId, type)
-      .then((ev) => { if (alive && ev) { setDate(ev.date); setPlaceLabel(ev.placeLabel); } })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [childId, type]);
 
   async function save() {
     if (proofMissing) {
@@ -117,7 +115,7 @@ function FiliationEditForm({ treeId, childId, childName, filiationId, filiationT
         unionId: unions ? (union || null) : undefined,
       });
       if (needsEvent) {
-        await saveFiliationEvent(treeId, { childId, childName, filiationType: type, date, placeLabel, proof });
+        await saveFiliationEvent(treeId, { filiationId, eventId, childId, childName, filiationType: type, date, placeLabel, proof });
       }
       onChanged?.();
       pushToast('Lien modifié.');
@@ -194,6 +192,7 @@ function ParentsBlock({ individualId, individualName, treeId, parents, canEdit, 
             <div className="flex items-center gap-1.5">
               <PersonLink individual={p.individual} />
               <FiliationBadge type={p.filiationType} />
+              <EventInfo event={p.event} />
             </div>
             {canEdit && (
               <span className="flex gap-2">
@@ -212,6 +211,9 @@ function ParentsBlock({ individualId, individualName, treeId, parents, canEdit, 
               childId={individualId}
               childName={individualName}
               filiationId={p.filiationId}
+              eventId={p.eventId}
+              eventDate={p.event?.date}
+              eventPlace={p.event?.placeLabel}
               filiationType={p.filiationType}
               onChanged={onChanged}
               onDone={() => setEditingId(null)}
@@ -363,6 +365,7 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
                 <div className="flex items-center gap-1.5">
                   <PersonLink individual={c.individual} />
                   <FiliationBadge type={c.filiationType} />
+                  <EventInfo event={c.event} />
                 </div>
                 {canEdit && (
                   <span className="flex gap-2">
@@ -381,6 +384,9 @@ function ChildrenBlock({ individualId, treeId, unions, childGroups, canEdit, onC
                   childId={c.individual?.id}
                   childName={[c.individual?.firstNames, c.individual?.lastName].filter(Boolean).join(' ')}
                   filiationId={c.filiationId}
+                  eventId={c.eventId}
+                  eventDate={c.event?.date}
+                  eventPlace={c.event?.placeLabel}
                   filiationType={c.filiationType}
                   unionId={group.union?.id || null}
                   unions={unions}
