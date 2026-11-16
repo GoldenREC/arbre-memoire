@@ -216,3 +216,25 @@ describe('famille du conjoint non affichée', () => {
     expect(lv.has('gp2')).toBe(false);
   });
 });
+
+describe('anciens conjoints : le plus récent est le plus proche', () => {
+  // Conjoint actuel à droite ; deux anciens à gauche : le plus récent (x) doit être le plus proche de la personne.
+  const people7 = { moi: {}, cur: {}, old: {}, older: {} };
+  const unions7 = [
+    { id: 'uCur', partnerIds: ['moi', 'cur'], status: 'ongoing', unionType: 'marriage', startDate: '2010-01-01' },
+    { id: 'uOld', partnerIds: ['moi', 'old'], status: 'divorced', unionType: 'marriage', startDate: '2002-01-01' },
+    { id: 'uOlder', partnerIds: ['moi', 'older'], status: 'divorced', unionType: 'marriage', startDate: '1995-01-01' },
+  ];
+  const g7 = fakeGraph({ people: people7, unions: unions7, links: [] });
+  const lay7 = buildFamilyLayout(g7, 'moi');
+  const x7 = (id) => lay7.nodes.find((n) => n.id === id).x;
+
+  it('le conjoint actuel est à droite, au plus près', () => {
+    expect(x7('cur')).toBeGreaterThan(x7('moi'));
+    expect(x7('cur') - x7('moi')).toBe(228);
+  });
+  it('l\'ancien conjoint le plus récent est à gauche, au plus près ; le plus ancien plus loin', () => {
+    expect(x7('moi') - x7('old')).toBe(228);
+    expect(x7('old')).toBeGreaterThan(x7('older'));
+  });
+});
