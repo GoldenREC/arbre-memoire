@@ -184,3 +184,22 @@ describe('conjoints voisins de la personne', () => {
     expect(Math.sign(x4('a') - x4('moi'))).toBe(-Math.sign(x4('b') - x4('moi')));
   });
 });
+
+describe('chaîne des conjoints à gauche', () => {
+  // « moi » a un ancien conjoint à gauche (a), dont le conjoint suivant (a2) doit être plus loin que a.
+  const people5 = { moi: { birth: '1980' }, a: {}, a2: {}, b: {} };
+  const unions5 = [
+    { id: 'uA', partnerIds: ['moi', 'a'], status: 'divorced', unionType: 'marriage' },
+    { id: 'uA2', partnerIds: ['a', 'a2'], status: 'ongoing', unionType: 'marriage' },
+    { id: 'uB', partnerIds: ['moi', 'b'], status: 'ongoing', unionType: 'marriage' },
+  ];
+  const g5 = fakeGraph({ people: people5, unions: unions5, links: [] });
+  const lay5 = buildFamilyLayout(g5, 'moi');
+  const x5 = (id) => lay5.nodes.find((n) => n.id === id).x;
+
+  it('l\'ancien conjoint est au plus près, son conjoint suivant est derrière lui', () => {
+    expect(x5('a') - x5('a2')).toBe(228);
+    expect(x5('a')).toBeLessThan(x5('moi'));
+    expect(x5('moi') - x5('a')).toBe(228);
+  });
+});
