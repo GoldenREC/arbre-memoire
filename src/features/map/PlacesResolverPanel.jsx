@@ -203,7 +203,7 @@ export default function PlacesResolverPanel({ treeId, places, eventCountByPlaceI
                   {canEdit && (
                     <div className="mt-1.5 flex gap-2 text-[11px]">
                       <button disabled={busyId === p.id} onClick={() => handleGeocodeOne(p)} className="text-accent-600 hover:underline disabled:opacity-60">
-                        {busyId === p.id ? 'Géocodage…' : 'Géocoder'}
+                        {busyId === p.id ? 'Géocodage…' : p.geocode_status === 'ok' ? 'Re-géocoder' : 'Géocoder'}
                       </button>
                       <button onClick={() => openManualForm(p)} className="text-neutral-500 hover:underline">
                         Saisir manuellement
