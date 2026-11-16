@@ -2,48 +2,90 @@
  * Tracé des liens parent → enfant, en traits orthogonaux.
  * Chaque lien est un trait unique, de la couleur de son type : il descend du parent,
  * file sur sa propre voie horizontale, puis rejoint le haut de l'enfant.
- * Les voies sont distinctes dans une même gouttière, pour que deux liens ne se confondent jamais.
+ * Les voies et les points d'arrivée sont distincts pour tous les traits d'une même gouttière
+ * (y compris le trait commun de deux parents), pour que deux liens ne se confondent jamais.
  */
 const LANE_STEP = 11;
 const ARRIVAL_STEP = 14;
+const TRUNK_DROP = 14;
 
 export function linkPaths(links, graph) {
-  // Groupes de liens par gouttière (même hauteur de départ/arrivée) : une voie par lien.
-  const byGap = new Map();
+  const items = [];
+  const trunks = mergeCoupleTrunks(links, graph);
+  const usedKeys = new Set(trunks.flatMap((t) => t.parents.map((pid) => `${t.childId}|${pid}`)));
+
+  for (const t of trunks) {
+    const { p, q } = t;
+    items.push({
+      kind: 'trunk',
+      childId: t.childId,
+      parentId: p.parentId,
+      parentIds: [p.parentId, q.parentId],
+      group: `${Math.round(p.y1)}-${Math.round(p.y2)}`,
+      x1: (p.x1 + q.x1) / 2,
+      x2: p.x2,
+      y1: p.y1,
+      y2: p.y2,
+      yBar: p.y1 + TRUNK_DROP,
+      p,
+      q,
+    });
+  }
   for (const l of links) {
-    const key = `${Math.round(l.y1)}-${Math.round(l.y2)}`;
-    if (!byGap.has(key)) byGap.set(key, []);
-    byGap.get(key).push(l);
+    if (usedKeys.has(`${l.childId}|${l.parentId}`)) continue;
+    items.push({
+      kind: 'single',
+      childId: l.childId,
+      parentId: l.parentId,
+      group: `${Math.round(l.y1)}-${Math.round(l.y2)}`,
+      x1: l.x1,
+      x2: l.x2,
+      y1: l.y1,
+      y2: l.y2,
+    });
+  }
+
+  // Points d'arrivée : tous les traits d'un même enfant (trait commun compris) arrivent
+  // à des endroits différents du haut de la carte, rangés de gauche à droite.
+  const perChild = new Map();
+  for (const it of items) {
+    if (!perChild.has(it.childId)) perChild.set(it.childId, []);
+    perChild.get(it.childId).push(it);
+  }
+  for (const list of perChild.values()) {
+    list.sort((a, b) => a.x1 - b.x1);
+    list.forEach((it, k) => {
+      it.arrivalX = it.x2 + (k - (list.length - 1) / 2) * ARRIVAL_STEP;
+    });
+  }
+
+  // Voies horizontales : une voie par trait dans chaque gouttière.
+  const byGap = new Map();
+  for (const it of items) {
+    if (!byGap.has(it.group)) byGap.set(it.group, []);
+    byGap.get(it.group).push(it);
   }
   const paths = [];
-  const merged = mergeCoupleTrunks(links, graph);
-  const usedKeys = new Set(merged.flatMap((m) => m.parents.map((pid) => `${m.childId}|${pid}`)));
-  for (const m of merged) paths.push(m.path);
-  const rest = links.filter((l) => !usedKeys.has(`${l.childId}|${l.parentId}`));
-  const byGapRest = new Map();
-  for (const l of rest) {
-    const key = `${Math.round(l.y1)}-${Math.round(l.y2)}`;
-    if (!byGapRest.has(key)) byGapRest.set(key, []);
-    byGapRest.get(key).push(l);
-  }
-  for (const group of byGapRest.values()) {
-    group.sort((p, q) => p.x2 - q.x2 || p.x1 - q.x1);
-    // Points d'arrivée : plusieurs parents d'un même enfant arrivent à des endroits différents du haut de la carte.
-    const perChild = new Map();
-    for (const l of group) perChild.set(l.childId, (perChild.get(l.childId) || 0) + 1);
-    const seen = new Map();
-    group.forEach((l, lane) => {
-      const count = perChild.get(l.childId);
-      const k = seen.get(l.childId) || 0;
-      seen.set(l.childId, k + 1);
-      const arrivalX = l.x2 + (k - (count - 1) / 2) * ARRIVAL_STEP;
-      const midY = (l.y1 + l.y2) / 2;
+  for (const group of byGap.values()) {
+    group.sort((a, b) => a.x2 - b.x2 || a.x1 - b.x1);
+    group.forEach((it, lane) => {
+      const midY = (it.y1 + it.y2) / 2;
       const laneY = midY + (lane - (group.length - 1) / 2) * LANE_STEP;
-      paths.push({
-        parentId: l.parentId,
-        childId: l.childId,
-        d: `M ${l.x1} ${l.y1} L ${l.x1} ${laneY} L ${arrivalX} ${laneY} L ${arrivalX} ${l.y2}`,
-      });
+      if (it.kind === 'trunk') {
+        const { p, q } = it;
+        paths.push({
+          parentId: it.parentId,
+          childId: it.childId,
+          parentIds: it.parentIds,
+          d: `M ${p.x1} ${p.y1} L ${p.x1} ${it.yBar} L ${q.x1} ${it.yBar} L ${q.x1} ${q.y1} M ${it.x1} ${it.yBar} L ${it.x1} ${laneY} L ${it.arrivalX} ${laneY} L ${it.arrivalX} ${it.y2}`,
+        });
+      } else {
+        paths.push({
+          parentId: it.parentId,
+          childId: it.childId,
+          d: `M ${it.x1} ${it.y1} L ${it.x1} ${laneY} L ${it.arrivalX} ${laneY} L ${it.arrivalX} ${it.y2}`,
+        });
+      }
     });
   }
   return paths;
@@ -74,20 +116,7 @@ function mergeCoupleTrunks(links, graph) {
         if (!isCouple || p.y1 !== q.y1) continue;
         used.add(p.parentId);
         used.add(q.parentId);
-        const midX = (p.x1 + q.x1) / 2;
-        // Un U sous les deux cartes parents, puis une descente depuis son milieu vers l'enfant.
-        const yBar = p.y1 + 14;
-        const midY = (yBar + p.y2) / 2;
-        out.push({
-          childId,
-          parents: [p.parentId, q.parentId],
-          path: {
-            parentId: p.parentId,
-            childId,
-            parentIds: [p.parentId, q.parentId],
-            d: `M ${p.x1} ${p.y1} L ${p.x1} ${yBar} L ${q.x1} ${yBar} L ${q.x1} ${q.y1} M ${midX} ${yBar} L ${midX} ${midY} L ${p.x2} ${midY} L ${p.x2} ${p.y2}`,
-          },
-        });
+        out.push({ childId, parents: [p.parentId, q.parentId], p, q });
       }
     }
   }
@@ -107,7 +136,8 @@ export function unionLook(partnerIds, focusId, colour) {
  */
 export function linkLook(link, focusId, colour) {
   if (!focusId) return { stroke: '#a3a3a3', strokeWidth: 1, opacity: 1 };
-  const related = link.childId === focusId || link.parentId === focusId;
+  const parentIds = link.parentIds || [link.parentId];
+  const related = link.childId === focusId || parentIds.includes(focusId);
   if (related) return { stroke: colour, strokeWidth: 2.5, opacity: 1 };
   return { stroke: '#a3a3a3', strokeWidth: 1, opacity: 0.25 };
 }
