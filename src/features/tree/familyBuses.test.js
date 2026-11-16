@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkLook, linkPaths } from './familyBuses.js';
+import { linkLook, linkPaths, unionLook } from './familyBuses.js';
 
 const link = (parentId, childId, x1, x2, y1 = 100, y2 = 200) => ({ parentId, childId, x1, x2, y1, y2 });
 
@@ -33,5 +33,39 @@ describe('linkLook', () => {
   });
   it('s\'estompe quand il n\'est pas concerné', () => {
     expect(linkLook({ parentId: 'p', childId: 'c' }, 'x', '#00f').opacity).toBeLessThan(1);
+  });
+});
+
+describe('unionLook et trait commun', () => {
+  it('une union est grise par défaut et colorée quand un de ses conjoints est survolé', () => {
+    expect(unionLook(['a', 'b'], null, '#00f').stroke).toBe('#a3a3a3');
+    expect(unionLook(['a', 'b'], 'b', '#00f')).toMatchObject({ stroke: '#00f', strokeWidth: 2.5 });
+    expect(unionLook(['a', 'b'], 'z', '#00f').opacity).toBeLessThan(1);
+  });
+
+  it('deux parents d\'un même couple avec le même type de lien forment un seul trait', () => {
+    const graph = {
+      parentsOf: new Map([['c', [{ parentId: 'a', filiationType: 'biological' }, { parentId: 'b', filiationType: 'biological' }]]]),
+      getUnions: (id) => (id === 'a' || id === 'b' ? [{ partnerIds: ['a', 'b'] }] : []),
+    };
+    const links = [
+      { parentId: 'a', childId: 'c', x1: 100, x2: 300, y1: 100, y2: 200 },
+      { parentId: 'b', childId: 'c', x1: 400, x2: 300, y1: 100, y2: 200 },
+    ];
+    const paths = linkPaths(links, graph);
+    expect(paths).toHaveLength(1);
+    expect(paths[0].parentIds).toEqual(['a', 'b']);
+  });
+
+  it('deux parents de types différents restent deux traits', () => {
+    const graph = {
+      parentsOf: new Map([['c', [{ parentId: 'a', filiationType: 'adoption_plenary' }, { parentId: 'b', filiationType: 'biological' }]]]),
+      getUnions: (id) => (id === 'a' || id === 'b' ? [{ partnerIds: ['a', 'b'] }] : []),
+    };
+    const links = [
+      { parentId: 'a', childId: 'c', x1: 100, x2: 300, y1: 100, y2: 200 },
+      { parentId: 'b', childId: 'c', x1: 400, x2: 300, y1: 100, y2: 200 },
+    ];
+    expect(linkPaths(links, graph)).toHaveLength(2);
   });
 });

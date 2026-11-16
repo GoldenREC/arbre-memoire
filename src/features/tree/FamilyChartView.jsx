@@ -3,7 +3,7 @@ import { useFamilyTree } from './FamilyTreeContext.jsx';
 
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
-import { linkLook, linkPaths } from './familyBuses.js';
+import { linkLook, linkPaths, unionLook } from './familyBuses.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
 import TreeLegend from './TreeLegend.jsx';
@@ -56,11 +56,13 @@ export default function FamilyChartView({ onOpenIndividual }) {
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={width} height={height} style={{ transform: `translate(${-bounds.minX}px, ${-bounds.minY}px)` }}>
             {couples.map((c, i) => {
               const u = unionStyle(c.status, c.unionType);
-              return <line key={`c${i}`} x1={c.x1} y1={c.y} x2={c.x2} y2={c.y} stroke={u.color} strokeWidth={2.5} strokeDasharray={u.dash} />;
+              const look = unionLook(c.partnerIds, focusId, u.color);
+              return <line key={`c${i}`} x1={c.x1} y1={c.y} x2={c.x2} y2={c.y} stroke={look.stroke} strokeWidth={look.strokeWidth} strokeOpacity={look.opacity} strokeDasharray={u.dash} />;
             })}
             {arcs.map((a, i) => {
               const u = unionStyle(a.status, a.unionType);
               // Tracé orthogonal : sort de la carte par le côté, descend sous la rangée, rentre par le côté du conjoint.
+              const look = unionLook(a.partnerIds, focusId, u.color);
               const sA = a.bx > a.ax ? 1 : -1;
               const bus = Math.max(a.ay, a.by) + CARD_H / 2 + 22 + a.lane * 12;
               const x1 = a.ax + sA * 10;
@@ -70,14 +72,15 @@ export default function FamilyChartView({ onOpenIndividual }) {
                   key={`a${i}`}
                   d={`M ${a.ax} ${a.ay} L ${x1} ${a.ay} L ${x1} ${bus} L ${x2} ${bus} L ${x2} ${a.by} L ${a.bx} ${a.by}`}
                   fill="none"
-                  stroke={u.color}
-                  strokeWidth={2}
+                  stroke={look.stroke}
+                  strokeWidth={look.strokeWidth}
+                  strokeOpacity={look.opacity}
                   strokeLinejoin="round"
                   strokeDasharray={u.dash}
                 />
               );
             })}
-            {linkPaths(links).map((p, i) => {
+            {linkPaths(links, graph).map((p, i) => {
               const style = linkStyle(graph, p.childId, [p.parentId]);
               const look = linkLook(p, focusId, style.color);
               return <path key={`l${i}`} d={p.d} fill="none" stroke={look.stroke} strokeWidth={look.strokeWidth} strokeOpacity={look.opacity} strokeDasharray={style.dash} />;
