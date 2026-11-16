@@ -4,8 +4,8 @@
  * file sur sa propre voie horizontale, puis rejoint le haut de l'enfant.
  * Les voies sont distinctes dans une même gouttière, pour que deux liens ne se confondent jamais.
  */
-const LANE_STEP = 9;
-const ARRIVAL_STEP = 10;
+const LANE_STEP = 11;
+const ARRIVAL_STEP = 14;
 
 export function linkPaths(links, graph) {
   // Groupes de liens par gouttière (même hauteur de départ/arrivée) : une voie par lien.
@@ -75,7 +75,9 @@ function mergeCoupleTrunks(links, graph) {
         used.add(p.parentId);
         used.add(q.parentId);
         const midX = (p.x1 + q.x1) / 2;
-        const midY = (p.y1 + p.y2) / 2;
+        // Un U sous les deux cartes parents, puis une descente depuis son milieu vers l'enfant.
+        const yBar = p.y1 + 14;
+        const midY = (yBar + p.y2) / 2;
         out.push({
           childId,
           parents: [p.parentId, q.parentId],
@@ -83,7 +85,7 @@ function mergeCoupleTrunks(links, graph) {
             parentId: p.parentId,
             childId,
             parentIds: [p.parentId, q.parentId],
-            d: `M ${midX} ${p.y1} L ${midX} ${midY} L ${p.x2} ${midY} L ${p.x2} ${p.y2}`,
+            d: `M ${p.x1} ${p.y1} L ${p.x1} ${yBar} L ${q.x1} ${yBar} L ${q.x1} ${q.y1} M ${midX} ${yBar} L ${midX} ${midY} L ${p.x2} ${midY} L ${p.x2} ${p.y2}`,
           },
         });
       }
