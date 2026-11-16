@@ -2,16 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { FamilyTreeProvider, useFamilyTree } from './FamilyTreeContext.jsx';
-import AscendancyView from './AscendancyView.jsx';
-import DescendancyView from './DescendancyView.jsx';
+import FamilyChartView from './FamilyChartView.jsx';
 import FanChartView from './FanChartView.jsx';
-import CoupleView from './CoupleView.jsx';
 
 const TABS = [
-  { key: 'ascendance', label: 'Ascendance' },
-  { key: 'descendance', label: 'Descendance' },
+  { key: 'famille', label: 'Famille' },
   { key: 'eventail', label: 'Éventail' },
-  { key: 'couples', label: 'Couples' },
 ];
 
 /**
@@ -35,8 +31,8 @@ export default function FamilyTreeContainer() {
 }
 
 function FamilyTreeExplorer() {
-  const { loading, error, graph, rootId, setRootId, generations, setGenerations, orientation, setOrientation, goBack, goHome, canGoBack, canGoHome } = useFamilyTree();
-  const [tab, setTab] = useState('ascendance');
+  const { loading, error, graph, rootId, setRootId, generations, setGenerations, goBack, goHome, canGoBack, canGoHome } = useFamilyTree();
+  const [tab, setTab] = useState('famille');
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
   const openIndividual = (individualId) => navigate(`/individus/${individualId}`);
@@ -90,17 +86,19 @@ function FamilyTreeExplorer() {
           )}
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-          Générations
-          <input
-            type="range"
-            min={2}
-            max={6}
-            value={generations}
-            onChange={(e) => setGenerations(Number(e.target.value))}
-          />
-          <span className="w-4 text-center">{generations}</span>
-        </label>
+        {tab === 'eventail' && (
+          <label className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+            Générations
+            <input
+              type="range"
+              min={2}
+              max={6}
+              value={generations}
+              onChange={(e) => setGenerations(Number(e.target.value))}
+            />
+            <span className="w-4 text-center">{generations}</span>
+          </label>
+        )}
 
         <div className="flex items-center gap-1 text-xs">
           <button onClick={goBack} disabled={!canGoBack} title="Revenir à la personne précédente" className="rounded bg-neutral-100 px-2 py-1 text-neutral-600 disabled:opacity-40 dark:bg-neutral-800 dark:text-neutral-300">
@@ -111,31 +109,6 @@ function FamilyTreeExplorer() {
           </button>
         </div>
 
-        {tab === 'ascendance' && (
-          <div className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
-            <button
-              onClick={() => setOrientation('bottomUp')}
-              title="Racine en bas, parents au-dessus"
-              className={`rounded px-2 py-1 ${orientation === 'bottomUp' ? 'bg-accent-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
-            >
-              ⇡ Racine en bas
-            </button>
-            <button
-              onClick={() => setOrientation('horizontal')}
-              title="Orientation gauche → droite"
-              className={`rounded px-2 py-1 ${orientation === 'horizontal' ? 'bg-accent-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
-            >
-              ↔ Gauche → droite
-            </button>
-            <button
-              onClick={() => setOrientation('vertical')}
-              title="Orientation haut → bas"
-              className={`rounded px-2 py-1 ${orientation === 'vertical' ? 'bg-accent-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
-            >
-              ↕ Haut → bas
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-neutral-200 dark:border-neutral-800">
@@ -155,10 +128,8 @@ function FamilyTreeExplorer() {
       </div>
 
       <div className="min-h-0 flex-1">
-        {tab === 'ascendance' && <AscendancyView onOpenIndividual={openIndividual} />}
-        {tab === 'descendance' && <DescendancyView onOpenIndividual={openIndividual} />}
+        {tab === 'famille' && <FamilyChartView onOpenIndividual={openIndividual} />}
         {tab === 'eventail' && <FanChartView onOpenIndividual={openIndividual} />}
-        {tab === 'couples' && <CoupleView onOpenIndividual={openIndividual} />}
       </div>
     </div>
   );

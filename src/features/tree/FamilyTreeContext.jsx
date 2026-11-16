@@ -15,12 +15,8 @@ export function FamilyTreeProvider({ treeId, children }) {
   const defaultRootIndividualId = useAuthStore((s) => s.preferences?.defaultRootIndividualId);
   const [rootId, setRootId] = useState(null);
   const [generations, setGenerations] = useState(5);
-  // 'horizontal' (gauche → droite, par défaut) ou 'vertical' (haut → bas) —
-  // ne concerne que la vue Ascendance (voir AscendancyView.jsx) ; partagé
-  // ici pour que le choix survive si l'utilisateur change d'onglet.
-  // 'bottomUp' (par défaut) : la racine en bas, parents au-dessus, puis
-  // grands-parents plus haut ; 'horizontal' et 'vertical' restent disponibles.
-  const [orientation, setOrientation] = useState('bottomUp');
+  // Vue Famille : afficher ou non les frères et sœurs (de tout le monde).
+  const [showSiblings, setShowSiblings] = useState(false);
   // Pile des racines précédentes, pour revenir en arrière après un recentrage.
   const [history, setHistory] = useState([]);
 
@@ -76,8 +72,8 @@ export function FamilyTreeProvider({ treeId, children }) {
     setRootId: navigateTo,
     generations,
     setGenerations,
-    orientation,
-    setOrientation,
+    showSiblings,
+    setShowSiblings,
   };
 
   return <FamilyTreeContext.Provider value={value}>{children}</FamilyTreeContext.Provider>;
