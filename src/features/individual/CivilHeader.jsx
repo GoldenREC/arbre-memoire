@@ -304,6 +304,7 @@ export default function CivilHeader({ individual, unions, places, canEdit, onSav
               ⚭ avec {u.partner ? `${u.partner.firstNames} ${u.partner.lastName}` : 'inconnu(e)'}
               {u.startDate ? ` — ${formatGenealogyDate({ date: u.startDate, datePrecision: u.startDatePrecision })}` : ''}
               {u.status === 'divorced' ? ' (divorcé·e·s)' : ''}
+              {u.status === 'separated' ? ' (séparé·e·s)' : ''}
             </div>
           ))}
           {individual.occupation && <div>{individual.occupation}</div>}
