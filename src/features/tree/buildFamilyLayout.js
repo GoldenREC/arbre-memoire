@@ -208,6 +208,28 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
     }
   }
 
+  // Unions dont les deux conjoints sont dans l'arbre mais non voisins : tracées en arc
+  // sous la rangée, pour qu'aucune union enregistrée n'échappe à l'affichage.
+  const drawnUnions = new Set(couples.map((c) => c.unionId));
+  const arcs = [];
+  for (const union of graph.unions.values()) {
+    if (drawnUnions.has(union.id)) continue;
+    const present = (union.partnerIds || []).filter((id) => byId.has(id));
+    for (let i = 0; i + 1 < present.length; i++) {
+      const a = byId.get(present[i]);
+      const b = byId.get(present[i + 1]);
+      arcs.push({
+        unionId: union.id,
+        unionType: union.unionType || null,
+        status: union.status || null,
+        ax: a.x + CARD_W / 2,
+        ay: a.y + CARD_H,
+        bx: b.x + CARD_W / 2,
+        by: b.y + CARD_H,
+      });
+    }
+  }
+
   const xs = nodes.map((n) => n.x);
   const ys = nodes.map((n) => n.y);
   const bounds = {
@@ -216,5 +238,5 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
     minY: Math.min(...ys) - PAD,
     maxY: Math.max(...ys) + CARD_H + PAD,
   };
-  return { nodes, couples, links, bounds };
+  return { nodes, couples, links, arcs, bounds };
 }

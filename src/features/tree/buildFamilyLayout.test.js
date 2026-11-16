@@ -7,6 +7,7 @@ function fakeGraph({ people, unions = [], links = [] }) {
   const childrenOf = (id) => links.filter((l) => l.parentId === id).map((l) => l.childId);
   const unionsOf = (id) => unions.filter((u) => u.partnerIds.includes(id));
   return {
+    unions: new Map(unions.map((u) => [u.id, u])),
     getIndividual: (id) => (people[id] ? { id, birthDate: people[id].birth || null } : null),
     getParents: parentsOf,
     getChildren: childrenOf,
@@ -145,5 +146,21 @@ describe('ordre des conjoints autour de la racine', () => {
   });
   it('le frère cadet reste à droite de la racine', () => {
     expect(x('moi')).toBeLessThan(x('toi2'));
+  });
+});
+
+describe('aucune union enregistrée n\'est oubliée', () => {
+  it('chaque union dont les deux conjoints sont dans l\'arbre est tracée (en couple ou en arc)', () => {
+    // « ex » est une personne sans parent connu : placée à part, donc non voisine de « mere ».
+    const people3 = { pere: {birth:'1950'}, mere: {}, moi: {birth:'1980'}, ex: {birth:'1960'} };
+    const unions3 = [
+      { id: 'uP', partnerIds: ['pere', 'mere'] },
+      { id: 'uX', partnerIds: ['mere', 'ex'], unionType: 'marriage', status: 'divorced' },
+    ];
+    const links3 = [['pere','moi'],['mere','moi']].map(([parentId, childId]) => ({ parentId, childId, unionId: null, filiationType: 'biological' }));
+    const g3 = fakeGraph({ people: people3, unions: unions3, links: links3 });
+    const lay3 = buildFamilyLayout(g3, 'moi');
+    const drawn = [...lay3.couples.map((c) => c.unionId), ...lay3.arcs.map((a) => a.unionId)];
+    expect(drawn).toEqual(expect.arrayContaining(['uP', 'uX']));
   });
 });
