@@ -277,8 +277,9 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
 
   // Point d'attache d'une union sur la carte : côté qui fait face à l'autre conjoint.
   // Les coordonnées des nœuds sont le centre de la carte : les bords sont à ± CARD_W / 2.
+  // Les arcs entrent dans la partie basse du côté, pour ne pas se confondre avec le trait droit du couple (milieu).
   function sideAnchors(a, b) {
-    const midY = (n) => n.y + CARD_H / 2;
+    const midY = (n) => n.y + CARD_H / 2 + 14;
     if (b.x > a.x) return { ax: a.x + CARD_W / 2, ay: midY(a), bx: b.x - CARD_W / 2, by: midY(b) };
     return { ax: a.x - CARD_W / 2, ay: midY(a), bx: b.x + CARD_W / 2, by: midY(b) };
   }
