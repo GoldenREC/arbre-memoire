@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { searchCommunes, searchByPostcode } from '../../lib/geo/banAddressApi.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toProperCase } from '../../lib/utils/properCase.js';
 import { EMPTY_PLACE, composePlaceLabel } from '../../lib/utils/placeLabel.js';
+import { COUNTRY_PROFILES, getCountryProfile } from '../../lib/geo/countryProfiles.js';
 
 // Ré-exportés pour compatibilité (code existant important depuis ce module) ;
 // la définition canonique vit dans lib/utils/placeLabel.js, utilisable aussi
 // par la couche données (individualMutations.js) sans dépendre de l'UI.
 export { EMPTY_PLACE, composePlaceLabel };
+
+const NOOP_SEARCH = () => Promise.resolve([]);
 
 function useDebouncedSuggestions(query, fetcher, minLength = 2) {
   const [suggestions, setSuggestions] = useState([]);
@@ -33,7 +35,7 @@ function Suggestions({ items, onPick }) {
   return (
     <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
       {items.map((s, i) => (
-        <li key={`${s.citycode}-${i}`}>
+        <li key={`${s.city}-${s.postalCode}-${i}`}>
           <button
             type="button"
             onClick={() => onPick(s)}
@@ -50,18 +52,24 @@ function Suggestions({ items, onPick }) {
 
 /**
  * Lieu structuré en 9 champs (numéro, rue, bâtiment/lieu-dit,
- * arrondissement, commune, code postal, département/état, région,
- * pays) avec autocomplétion de la commune et du code postal via l'API
- * Adresse du gouvernement français (gratuite, sans clé — voir
- * lib/geo/banAddressApi.js). Choisir une suggestion pré-remplit tout ce
- * qui en découle (commune, code postal, département, région, pays,
- * arrondissement pour Paris/Lyon/Marseille) sans jamais toucher aux
- * champs qu'elle ne peut pas connaître (numéro, rue, bâtiment) : ceux-là
- * restent de simples champs libres, à tout moment.
+ * arrondissement, commune, code postal, département/région, pays) avec
+ * autocomplétion de la commune et du code postal. Le libellé de chaque
+ * champ ET la source d'autocomplétion dépendent du pays sélectionné (voir
+ * lib/geo/countryProfiles.js) : France (Base Adresse Nationale), Allemagne
+ * et Suisse (OpenPLZ), Angleterre (postcodes.io), Belgique/Espagne/
+ * Portugal/Luxembourg/Grèce (Nominatim). Un pays non reconnu retombe sur
+ * des libellés génériques et une saisie entièrement libre, sans jamais
+ * bloquer la saisie.
+ *
+ * Choisir une suggestion pré-remplit tout ce qui en découle (commune, code
+ * postal, département/région équivalents, pays, arrondissement) sans
+ * jamais toucher aux champs qu'elle ne peut pas connaître (numéro, rue,
+ * bâtiment) : ceux-là restent de simples champs libres, à tout moment.
  *
  * `value` : { streetNumber, streetName, buildingName, arrondissement,
  * city, postalCode, department, region, country }. `onChange` reçoit le
- * nouvel objet complet à chaque modification.
+ * nouvel objet complet à chaque modification. Le schéma de ces 9 clés ne
+ * change jamais d'un pays à l'autre — seuls les libellés affichés varient.
  */
 export default function StructuredPlaceInput({ value = EMPTY_PLACE, onChange, disabled = false }) {
   const [cityQuery, setCityQuery] = useState(value.city || '');
@@ -70,8 +78,13 @@ export default function StructuredPlaceInput({ value = EMPTY_PLACE, onChange, di
 
   useEffect(() => { setCityQuery(value.city || ''); }, [value.city]);
 
-  const [citySuggestions] = useDebouncedSuggestions(cityFocused ? cityQuery : '', searchCommunes);
-  const [postcodeSuggestions] = useDebouncedSuggestions(postcodeFocused ? value.postalCode : '', searchByPostcode, 4);
+  const profile = useMemo(() => getCountryProfile(value.country), [value.country]);
+  const labels = profile.labels;
+  const citySearch = profile.search || NOOP_SEARCH;
+  const postcodeSearch = profile.searchByPostcode || NOOP_SEARCH;
+
+  const [citySuggestions] = useDebouncedSuggestions(cityFocused ? cityQuery : '', citySearch);
+  const [postcodeSuggestions] = useDebouncedSuggestions(postcodeFocused ? value.postalCode : '', postcodeSearch, 3);
 
   function patch(fields) {
     onChange({ ...value, ...fields });
@@ -83,7 +96,7 @@ export default function StructuredPlaceInput({ value = EMPTY_PLACE, onChange, di
       postalCode: s.postalCode,
       department: s.department,
       region: s.region,
-      country: s.country,
+      country: s.country || value.country,
       arrondissement: s.arrondissement || value.arrondissement,
     });
     setCityQuery(s.city);
@@ -99,18 +112,18 @@ export default function StructuredPlaceInput({ value = EMPTY_PLACE, onChange, di
 
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
-      <TextField label="Numéro de rue" value={value.streetNumber} disabled={disabled}
+      <TextField label={labels.streetNumber} value={value.streetNumber} disabled={disabled}
         onChange={(v) => patch({ streetNumber: v })} onBlur={normalizeOnBlur('streetNumber')} />
-      <TextField label="Nom de la rue" value={value.streetName} disabled={disabled} className="sm:col-span-2"
+      <TextField label={labels.streetName} value={value.streetName} disabled={disabled} className="sm:col-span-2"
         onChange={(v) => patch({ streetName: v })} onBlur={normalizeOnBlur('streetName')} />
-      <TextField label="Bâtiment / lieu-dit" value={value.buildingName} disabled={disabled} className="sm:col-span-2"
+      <TextField label={labels.buildingName} value={value.buildingName} disabled={disabled} className="sm:col-span-2"
         onChange={(v) => patch({ buildingName: v })} onBlur={normalizeOnBlur('buildingName')} />
-      <TextField label="Arrondissement" value={value.arrondissement} disabled={disabled}
+      <TextField label={labels.arrondissement} value={value.arrondissement} disabled={disabled}
         onChange={(v) => patch({ arrondissement: v })} onBlur={normalizeOnBlur('arrondissement')} />
 
       <div className="relative">
         <TextField
-          label="Commune / ville"
+          label={labels.city}
           value={cityQuery}
           disabled={disabled}
           onChange={(v) => { setCityQuery(v); patch({ city: v }); }}
@@ -122,7 +135,7 @@ export default function StructuredPlaceInput({ value = EMPTY_PLACE, onChange, di
 
       <div className="relative">
         <TextField
-          label="Code postal"
+          label={labels.postalCode}
           value={value.postalCode}
           disabled={disabled}
           onChange={(v) => patch({ postalCode: v })}
@@ -132,12 +145,25 @@ export default function StructuredPlaceInput({ value = EMPTY_PLACE, onChange, di
         {postcodeFocused && <Suggestions items={postcodeSuggestions} onPick={applySuggestion} />}
       </div>
 
-      <TextField label="Département / État" value={value.department} disabled={disabled}
+      <TextField label={labels.department} value={value.department} disabled={disabled}
         onChange={(v) => patch({ department: v })} onBlur={normalizeOnBlur('department')} />
-      <TextField label="Région" value={value.region} disabled={disabled}
+      <TextField label={labels.region} value={value.region} disabled={disabled}
         onChange={(v) => patch({ region: v })} onBlur={normalizeOnBlur('region')} />
-      <TextField label="Pays" value={value.country} disabled={disabled}
-        onChange={(v) => patch({ country: v })} onBlur={normalizeOnBlur('country')} />
+
+      <label className="block text-xs text-neutral-500 dark:text-neutral-400">
+        <span className="mb-1 block">Pays</span>
+        <input
+          className="field"
+          list="structured-place-country-list"
+          value={value.country || ''}
+          disabled={disabled}
+          onChange={(e) => patch({ country: e.target.value })}
+          onBlur={normalizeOnBlur('country')}
+        />
+        <datalist id="structured-place-country-list">
+          {COUNTRY_PROFILES.map((p) => <option key={p.id} value={p.id} />)}
+        </datalist>
+      </label>
     </div>
   );
 }
