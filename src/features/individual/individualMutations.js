@@ -223,14 +223,14 @@ export async function createIndividualFull(treeId, input = {}) {
 export async function addParentLink(treeId, childId, parentId, filiationType = 'biological') {
   const { error } = await supabase
     .from('filiations')
-    .upsert({ tree_id: treeId, child_id: childId, parent_id: parentId, filiation_type: filiationType }, { onConflict: 'child_id,parent_id' });
+    .upsert({ tree_id: treeId, child_id: childId, parent_id: parentId, filiation_type: filiationType }, { onConflict: 'child_id,parent_id,filiation_type' });
   if (error) throw error;
 }
 
 export async function addChildLink(treeId, parentId, childId, filiationType = 'biological', unionId = null) {
   const { error } = await supabase
     .from('filiations')
-    .upsert({ tree_id: treeId, child_id: childId, parent_id: parentId, filiation_type: filiationType, union_id: unionId }, { onConflict: 'child_id,parent_id' });
+    .upsert({ tree_id: treeId, child_id: childId, parent_id: parentId, filiation_type: filiationType, union_id: unionId }, { onConflict: 'child_id,parent_id,filiation_type' });
   if (error) throw error;
 }
 
@@ -272,7 +272,7 @@ export async function linkAsSibling(treeId, newIndividualId, existingIndividualI
       .from('filiations')
       .upsert(
         { tree_id: treeId, child_id: newIndividualId, parent_id: parentId, filiation_type: 'biological', union_id: unionId },
-        { onConflict: 'child_id,parent_id' }
+        { onConflict: 'child_id,parent_id,filiation_type' }
       );
     if (error) throw error;
   }

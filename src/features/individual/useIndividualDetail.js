@@ -41,6 +41,12 @@ async function fetchIndividualsByIds(ids) {
  * tient à jour en temps réel via Supabase Realtime : si un autre membre
  * de la famille modifie la même fiche, elle se recharge automatiquement.
  */
+/** Date et lieu de l'événement d'un lien daté (adoption, reconnaissance…). */
+function eventSummary(ev) {
+  if (!ev) return null;
+  return { date: ev.event_date || '', precision: ev.date_precision || 'unknown', placeLabel: ev.places?.raw_label || '' };
+}
+
 export function useIndividualDetail(individualId) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const reloadTimer = useRef(null);
@@ -59,8 +65,8 @@ export function useIndividualDetail(individualId) {
 
       const [{ data: parentLinks, error: pErr }, { data: childLinks, error: cErr }, { data: myPartnerRows, error: mpErr }] =
         await Promise.all([
-          supabase.from('filiations').select('id, parent_id, union_id, filiation_type').eq('child_id', individualId),
-          supabase.from('filiations').select('id, child_id, union_id, filiation_type').eq('parent_id', individualId),
+          supabase.from('filiations').select('id, parent_id, union_id, filiation_type, event_id, events(id, event_date, date_precision, places(raw_label))').eq('child_id', individualId),
+          supabase.from('filiations').select('id, child_id, union_id, filiation_type, event_id, events(id, event_date, date_precision, places(raw_label))').eq('parent_id', individualId),
           supabase.from('union_partners').select('union_id').eq('individual_id', individualId),
         ]);
       if (pErr) throw pErr;
@@ -94,6 +100,8 @@ export function useIndividualDetail(individualId) {
       const parents = (parentLinks || []).map((l) => ({
         filiationId: l.id,
         filiationType: l.filiation_type,
+        eventId: l.event_id || null,
+        event: eventSummary(l.events),
         individual: relatedIndividuals.get(l.parent_id) || null,
       }));
 
@@ -119,6 +127,8 @@ export function useIndividualDetail(individualId) {
         childGroups.get(key).children.push({
           filiationId: link.id,
           filiationType: link.filiation_type,
+          eventId: link.event_id || null,
+          event: eventSummary(link.events),
           individual: relatedIndividuals.get(link.child_id) || null,
         });
       }

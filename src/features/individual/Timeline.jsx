@@ -11,6 +11,7 @@ const EVENT_ICONS = {
   birth: '👶', death: '⚰️', union_start: '💑', marriage: '💍', divorce: '💔', engagement: '💞',
   baptism: '⛲', burial: '🪦', residence: '🏠', immigration: '✈️', emigration: '🛳️',
   occupation: '💼', education: '🎓', military: '🎖️', religion: '⛪', custom: '📌',
+  adoption: '🤝', foster_placement: '🏡', recognition: '✍️', abandonment: '📭',
 };
 
 // Les types gérés directement dans l'en-tête (état civil) ne sont pas

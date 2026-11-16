@@ -74,8 +74,10 @@ export async function loadFamilyGraph(treeId) {
       filiationType: row.filiation_type,
     });
 
+    // Un même couple parent/enfant peut avoir plusieurs liens (un par type) :
+    // l'arbre ne doit compter l'enfant qu'une fois.
     if (!childrenOf.has(row.parent_id)) childrenOf.set(row.parent_id, []);
-    childrenOf.get(row.parent_id).push(row.child_id);
+    if (!childrenOf.get(row.parent_id).includes(row.child_id)) childrenOf.get(row.parent_id).push(row.child_id);
   }
 
   // individual_id -> [unionId]
@@ -94,7 +96,11 @@ export async function loadFamilyGraph(treeId) {
     childrenOf,
     unionsOf,
     getIndividual: (id) => individuals.get(id) || null,
-    getParents: (id) => parentsOf.get(id) || [],
+    // Un parent par couple : le premier lien trouvé sert à l'arbre.
+    getParents: (id) => {
+      const seen = new Set();
+      return (parentsOf.get(id) || []).filter((p) => (seen.has(p.parentId) ? false : seen.add(p.parentId)));
+    },
     getChildren: (id) => childrenOf.get(id) || [],
     getUnions: (id) => (unionsOf.get(id) || []).map((uid) => unions.get(uid)),
     getSpouses: (id) =>
