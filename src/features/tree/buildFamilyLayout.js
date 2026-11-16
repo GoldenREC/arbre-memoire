@@ -276,10 +276,11 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
   }
 
   // Point d'attache d'une union sur la carte : côté qui fait face à l'autre conjoint.
+  // Les coordonnées des nœuds sont le centre de la carte : les bords sont à ± CARD_W / 2.
   function sideAnchors(a, b) {
     const midY = (n) => n.y + CARD_H / 2;
-    if (b.x > a.x) return { ax: a.x + CARD_W, ay: midY(a), bx: b.x, by: midY(b) };
-    return { ax: a.x, ay: midY(a), bx: b.x + CARD_W, by: midY(b) };
+    if (b.x > a.x) return { ax: a.x + CARD_W / 2, ay: midY(a), bx: b.x - CARD_W / 2, by: midY(b) };
+    return { ax: a.x - CARD_W / 2, ay: midY(a), bx: b.x + CARD_W / 2, by: midY(b) };
   }
   const xs = nodes.map((n) => n.x);
   const ys = nodes.map((n) => n.y);

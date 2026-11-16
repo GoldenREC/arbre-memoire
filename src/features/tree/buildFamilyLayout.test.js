@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFamilyLayout, computeLevels } from './buildFamilyLayout.js';
+import { buildFamilyLayout, computeLevels, CARD_W } from './buildFamilyLayout.js';
 
 // Fixture au format de loadFamilyGraph.
 function fakeGraph({ people, unions = [], links = [] }) {
@@ -236,5 +236,25 @@ describe('anciens conjoints : le plus récent est le plus proche', () => {
   it('l\'ancien conjoint le plus récent est à gauche, au plus près ; le plus ancien plus loin', () => {
     expect(x7('moi') - x7('old')).toBe(228);
     expect(x7('old')).toBeGreaterThan(x7('older'));
+  });
+});
+
+describe('union non voisine : tracée depuis les bords des cartes', () => {
+  it('l\'arc part du bord de la carte et arrive au bord de l\'autre conjoint', () => {
+    // moi – a (voisin) – c : l'union moi–c ne peut pas être voisine, elle doit être tracée en arc.
+    const people8 = { moi: {}, a: {}, c: {} };
+    const unions8 = [
+      { id: 'uA', partnerIds: ['moi', 'a'], status: 'divorced', unionType: 'marriage', startDate: '2000-01-01' },
+      { id: 'uC', partnerIds: ['a', 'c'], status: 'ongoing', unionType: 'marriage', startDate: '2005-01-01' },
+      { id: 'uX', partnerIds: ['moi', 'c'], status: 'separated', unionType: 'cohabitation', startDate: null },
+    ];
+    const g8 = fakeGraph({ people: people8, unions: unions8, links: [] });
+    const lay8 = buildFamilyLayout(g8, 'moi');
+    const x8 = (id) => lay8.nodes.find((n) => n.id === id).x;
+    const arc = lay8.arcs.find((r) => r.unionId === 'uX');
+    expect(arc).toBeDefined();
+    const [near, far] = x8('moi') > x8('c') ? [x8('moi'), x8('c')] : [x8('c'), x8('moi')];
+    expect(Math.min(arc.ax, arc.bx)).toBe(far < near ? far + CARD_W / 2 : near - CARD_W / 2);
+    expect(Math.max(arc.ax, arc.bx)).toBe(far < near ? near - CARD_W / 2 : far + CARD_W / 2);
   });
 });
