@@ -59,7 +59,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
               const u = unionStyle(a.status, a.unionType);
               // Tracé orthogonal : sort de la carte par le côté, descend sous la rangée, rentre par le côté du conjoint.
               const sA = a.bx > a.ax ? 1 : -1;
-              const bus = Math.max(a.ay, a.by) + CARD_H / 2 + 22;
+              const bus = Math.max(a.ay, a.by) + CARD_H / 2 + 22 + a.lane * 12;
               const x1 = a.ax + sA * 10;
               const x2 = a.bx - sA * 10;
               return (
@@ -68,7 +68,8 @@ export default function FamilyChartView({ onOpenIndividual }) {
                   d={`M ${a.ax} ${a.ay} L ${x1} ${a.ay} L ${x1} ${bus} L ${x2} ${bus} L ${x2} ${a.by} L ${a.bx} ${a.by}`}
                   fill="none"
                   stroke={u.color}
-                  strokeWidth={2.5}
+                  strokeWidth={2}
+                  strokeLinejoin="round"
                   strokeDasharray={u.dash}
                 />
               );

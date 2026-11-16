@@ -252,13 +252,19 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
   // sous la rangée, pour qu'aucune union enregistrée n'échappe à l'affichage.
   const drawnUnions = new Set(couples.map((c) => c.unionId));
   const arcs = [];
+  // Chaque union sous une même rangée reçoit sa propre voie, pour ne pas se superposer.
+  const lanesPerRow = new Map();
   for (const union of graph.unions.values()) {
     if (drawnUnions.has(union.id)) continue;
     const present = (union.partnerIds || []).filter((id) => byId.has(id));
     for (let i = 0; i + 1 < present.length; i++) {
       const a = byId.get(present[i]);
       const b = byId.get(present[i + 1]);
+      const rowKey = Math.max(a.y, b.y);
+      const lane = lanesPerRow.get(rowKey) || 0;
+      lanesPerRow.set(rowKey, lane + 1);
       arcs.push({
+        lane,
         unionId: union.id,
         unionType: union.unionType || null,
         status: union.status || null,
