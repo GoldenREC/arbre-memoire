@@ -86,7 +86,16 @@ export default function FamilyChartView({ onOpenIndividual }) {
             })}
           </svg>
           {nodes.map((n) => (
-            <div key={n.id} className="group absolute" style={{ left: n.x - CARD_W / 2, top: n.y, width: CARD_W, height: CARD_H }}>
+            <div
+              key={n.id}
+              className="group absolute cursor-pointer"
+              style={{ left: n.x - CARD_W / 2, top: n.y, width: CARD_W, height: CARD_H }}
+              onDoubleClick={(e) => {
+                if (e.target.closest?.('button')) return;
+                setRootId(n.id);
+              }}
+              title="Double-clic : centrer l'arbre sur cette personne"
+            >
               <div className="absolute -top-6 left-1/2 flex -translate-x-1/2 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <button
                   onPointerDown={(e) => e.stopPropagation()}

@@ -44,8 +44,9 @@ export default function TreeCanvas({ bounds, fitKey, height = '72vh', children }
 
   function onPointerDown(e) {
     if (e.button !== 0) return;
+    // Un clic sur un bouton (loupe, Centrer, Fiche) n'est pas un début de déplacement.
+    if (e.target.closest?.('button, a, input, select, textarea')) return;
     drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
-    e.currentTarget.setPointerCapture?.(e.pointerId);
   }
   function onPointerMove(e) {
     if (!drag.current) return;
