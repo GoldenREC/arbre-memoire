@@ -121,3 +121,29 @@ describe('frères et sœurs', () => {
     expect(lv.has('tante')).toBe(true);
   });
 });
+
+describe('ordre des conjoints autour de la racine', () => {
+  // Racine « moi » (conjointe à droite), sœur aînée « soeur » avec son conjoint « mari », frère cadet « toi2 ».
+  const people2 = { pere: {birth:'1950'}, mere: {}, soeur: {birth:'1978'}, mari: {}, moi: {birth:'1980'}, epouse: {}, toi2: {birth:'1985'} };
+  const unions2 = [
+    { id: 'uP', partnerIds: ['pere', 'mere'] },
+    { id: 'uS', partnerIds: ['soeur', 'mari'] },
+    { id: 'uM', partnerIds: ['moi', 'epouse'] },
+  ];
+  const links2 = [['pere','soeur'],['mere','soeur'],['pere','moi'],['mere','moi'],['pere','toi2'],['mere','toi2']]
+    .map(([parentId, childId]) => ({ parentId, childId, unionId: null, filiationType: 'biological' }));
+  const g2 = fakeGraph({ people: people2, unions: unions2, links: links2 });
+  const lay = buildFamilyLayout(g2, 'moi');
+  const x = (id) => lay.nodes.find((n) => n.id === id).x;
+
+  it('la sœur aînée a son conjoint à sa gauche', () => {
+    expect(x('mari')).toBeLessThan(x('soeur'));
+  });
+  it('la racine a son conjoint à sa droite, la sœur à sa gauche', () => {
+    expect(x('soeur')).toBeLessThan(x('moi'));
+    expect(x('moi')).toBeLessThan(x('epouse'));
+  });
+  it('le frère cadet reste à droite de la racine', () => {
+    expect(x('moi')).toBeLessThan(x('toi2'));
+  });
+});

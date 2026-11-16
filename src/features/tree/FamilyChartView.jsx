@@ -4,6 +4,7 @@ import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
+import TreeLegend from './TreeLegend.jsx';
 
 /**
  * Vue « Famille » : la racine au centre de son réseau (ancêtres au-dessus,
@@ -46,13 +47,8 @@ export default function FamilyChartView({ onOpenIndividual }) {
         >
           {showSiblings ? 'Masquer les frères et sœurs' : 'Voir les frères et sœurs'}
         </button>
-        <span className="ml-auto hidden flex-wrap gap-3 lg:flex">
-          <span><span className="inline-block w-6 border-t-[2.5px] border-neutral-600 align-middle" /> marié·e / en couple officiel</span>
-          <span><span className="inline-block w-6 border-t-[2.5px] border-dashed border-neutral-500 align-middle" /> en concubinage</span>
-          <span><span className="inline-block w-6 border-t-[2.5px] border-dashed border-amber-600 align-middle" /> divorcé·e / séparé·e</span>
-        </span>
       </div>
-      <TreeCanvas bounds={bounds} fitKey={`${rootId}-${generations}-${showSiblings}`} height="70vh">
+      <TreeCanvas bounds={bounds} fitKey={`${rootId}-${generations}-${showSiblings}`} height="62vh">
         <div className="relative" style={{ width, height }}>
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={width} height={height} style={{ transform: `translate(${-bounds.minX}px, ${-bounds.minY}px)` }}>
             {couples.map((c, i) => {
@@ -86,6 +82,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
           ))}
         </div>
       </TreeCanvas>
+      <TreeLegend />
     </div>
   );
 }
