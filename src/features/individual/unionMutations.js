@@ -20,18 +20,21 @@ export const RELATIONSHIP_STATUS_LABELS = {
   couple: 'En couple',
   married: 'Mariée',
   divorced: 'Divorcée',
+  separated: 'Séparée',
 };
 
 const STATUS_TO_UNION_COLUMNS = {
   couple: { unionType: 'cohabitation', status: 'ongoing' },
   married: { unionType: 'marriage', status: 'ongoing' },
   divorced: { unionType: 'marriage', status: 'divorced' },
+  separated: { unionType: 'cohabitation', status: 'separated' },
 };
 
 /** Déduit le choix du sélecteur (en couple/mariée/divorcée) à partir d'une union existante. */
 export function relationshipStatusFromUnion(union) {
   if (!union) return 'couple';
   if (union.status === 'divorced') return 'divorced';
+  if (union.status === 'separated') return 'separated';
   if (union.unionType === 'marriage') return 'married';
   return 'couple';
 }
@@ -102,6 +105,7 @@ const DEFINING_MILESTONES = {
   couple: ['union_start'],
   married: ['marriage'],
   divorced: ['marriage', 'divorce'],
+  separated: ['union_start'],
 };
 
 function milestoneHasContent(m) {
