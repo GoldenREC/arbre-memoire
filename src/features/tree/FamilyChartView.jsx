@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useFamilyTree } from './FamilyTreeContext.jsx';
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
-import { linkStyle } from './filiationStyle.js';
+import { linkStyle, unionStyle } from './filiationStyle.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
 
@@ -46,16 +46,21 @@ export default function FamilyChartView({ onOpenIndividual }) {
         >
           {showSiblings ? 'Masquer les frères et sœurs' : 'Voir les frères et sœurs'}
         </button>
-        <span className="ml-auto hidden lg:inline">Molette : zoom · glisser : déplacer · clic sur une carte : la centrer</span>
+        <span className="ml-auto hidden flex-wrap gap-3 lg:flex">
+          <span><span className="inline-block w-6 border-t-[2.5px] border-neutral-600 align-middle" /> marié·e / en couple officiel</span>
+          <span><span className="inline-block w-6 border-t-[2.5px] border-dashed border-neutral-500 align-middle" /> en concubinage</span>
+          <span><span className="inline-block w-6 border-t-[2.5px] border-dashed border-amber-600 align-middle" /> divorcé·e / séparé·e</span>
+        </span>
       </div>
       <TreeCanvas bounds={bounds} fitKey={`${rootId}-${generations}-${showSiblings}`} height="70vh">
         <div className="relative" style={{ width, height }}>
           <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={width} height={height} style={{ transform: `translate(${-bounds.minX}px, ${-bounds.minY}px)` }}>
-            {couples.map((c, i) => (
-              <line key={`c${i}`} x1={c.x1} y1={c.y} x2={c.x2} y2={c.y} stroke="#737373" strokeWidth={1.5} />
-            ))}
+            {couples.map((c, i) => {
+              const u = unionStyle(c.status, c.unionType);
+              return <line key={`c${i}`} x1={c.x1} y1={c.y} x2={c.x2} y2={c.y} stroke={u.color} strokeWidth={2.5} strokeDasharray={u.dash} />;
+            })}
             {links.map((l, i) => {
-              const style = linkStyle(graph, l.childId, l.parentIds);
+              const style = linkStyle(graph, l.childId, [l.parentId]);
               const ym = (l.y1 + l.y2) / 2;
               return (
                 <path
@@ -63,7 +68,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
                   d={`M ${l.x1} ${l.y1} C ${l.x1} ${ym}, ${l.x2} ${ym}, ${l.x2} ${l.y2}`}
                   fill="none"
                   stroke={style.color}
-                  strokeWidth={1.5}
+                  strokeWidth={1.75}
                   strokeDasharray={style.dash}
                 />
               );

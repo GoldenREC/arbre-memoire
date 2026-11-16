@@ -154,30 +154,49 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
 
   const nodes = [];
   const couples = [];
-  const links = [];
   function emit(unit) {
     const y = rowY(unit.level);
     unit.members.forEach((id, i) => nodes.push({ id, x: unit.memberX[i], y }));
-    if (unit.members.length > 1) {
-      const xs = unit.memberX;
-      couples.push({ x1: xs[0] + CARD_W / 2, x2: xs[xs.length - 1] - CARD_W / 2, y: y + CARD_H / 2 });
+    // Une ligne par union entre deux membres voisins : pas de trait pour un lien qui n'existe pas.
+    for (let i = 0; i < unit.members.length - 1; i++) {
+      const a = unit.members[i];
+      const b = unit.members[i + 1];
+      const union = graph.getUnions(a).find((u) => (u.partnerIds || []).includes(b));
+      if (!union) continue;
+      couples.push({
+        x1: unit.memberX[i] + CARD_W / 2,
+        x2: unit.memberX[i + 1] - CARD_W / 2,
+        y: y + CARD_H / 2,
+        unionId: union.id,
+        unionType: union.unionType || null,
+        status: union.status || null,
+      });
     }
-    for (const c of unit.children) {
-      const childY = rowY(c.level);
-      for (const childId of c.members.slice(0, 1)) {
-        links.push({
-          childId,
-          parentIds: unit.members,
-          x1: unit.cx,
-          y1: y + CARD_H,
-          x2: c.cx,
-          y2: childY,
-        });
-      }
-      emit(c);
-    }
+    unit.children.forEach(emit);
   }
   forest.forEach(emit);
+
+  // Liens : un trait par couple (parent, enfant) réel, du bas de la carte du parent
+  // vers le haut de la carte de l'enfant. Un enfant n'est jamais relié à un parent
+  // qui n'est pas le sien, même s'il est placé à côté.
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const links = [];
+  for (const child of nodes) {
+    const seen = new Set();
+    for (const link of graph.getParents(child.id)) {
+      const parent = byId.get(link.parentId);
+      if (!parent || seen.has(link.parentId)) continue;
+      seen.add(link.parentId);
+      links.push({
+        childId: child.id,
+        parentId: link.parentId,
+        x1: parent.x,
+        y1: parent.y + CARD_H,
+        x2: child.x,
+        y2: child.y,
+      });
+    }
+  }
 
   const xs = nodes.map((n) => n.x);
   const ys = nodes.map((n) => n.y);
