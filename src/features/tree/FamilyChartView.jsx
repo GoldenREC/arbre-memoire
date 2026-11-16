@@ -80,11 +80,30 @@ export default function FamilyChartView({ onOpenIndividual }) {
                 />
               );
             })}
-            {linkPaths(links, graph, arcs.map(arcBus)).map((p, i) => {
-              const style = linkStyle(graph, p.childId, [p.parentId]);
-              const look = linkLook(p, focusId, style.color);
-              return <path key={`l${i}`} d={p.d} fill="none" stroke={look.stroke} strokeWidth={look.strokeWidth} strokeOpacity={look.opacity} strokeDasharray={style.dash} />;
-            })}
+            {(() => {
+              // Un trait commun (trunk, deux parents fusionnés) peut croiser le trait
+              // d'un autre enfant du même couple quand ce dernier n'a qu'un seul parent
+              // en commun avec lui (type de filiation différent pour l'autre parent) :
+              // c'est inévitable en traits orthogonaux dès que les enfants sont de part
+              // et d'autre du couple. On dessine donc les traits simples d'abord, les
+              // traits communs ensuite, avec un halo de la couleur du fond sous ces
+              // derniers : au croisement, le trait commun « passe par-dessus » sans
+              // jamais paraître coupé ou confus.
+              const all = linkPaths(links, graph, arcs.map(arcBus));
+              const ordered = [...all.filter((p) => !p.parentIds), ...all.filter((p) => p.parentIds)];
+              return ordered.map((p, i) => {
+                const style = linkStyle(graph, p.childId, [p.parentId]);
+                const look = linkLook(p, focusId, style.color);
+                return (
+                  <g key={`l${i}`}>
+                    {p.parentIds && (
+                      <path d={p.d} fill="none" className="stroke-neutral-50 dark:stroke-neutral-950" strokeWidth={look.strokeWidth + 4} />
+                    )}
+                    <path d={p.d} fill="none" stroke={look.stroke} strokeWidth={look.strokeWidth} strokeOpacity={look.opacity} strokeDasharray={style.dash} />
+                  </g>
+                );
+              });
+            })()}
           </svg>
           {nodes.map((n) => (
             <div
