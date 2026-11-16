@@ -216,6 +216,7 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
       const union = graph.getUnions(a).find((u) => (u.partnerIds || []).includes(b));
       if (!union) continue;
       couples.push({
+        partnerIds: [a, b],
         x1: unit.memberX[i] + CARD_W / 2,
         x2: unit.memberX[i + 1] - CARD_W / 2,
         y: y + CARD_H / 2,
@@ -267,6 +268,7 @@ export function buildFamilyLayout(graph, rootId, opts = {}) {
       lanesPerRow.set(rowKey, lane + 1);
       arcs.push({
         lane,
+        partnerIds: [present[i], present[i + 1]],
         unionId: union.id,
         unionType: union.unionType || null,
         status: union.status || null,
