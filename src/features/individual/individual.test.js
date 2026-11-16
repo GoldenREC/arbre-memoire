@@ -47,8 +47,8 @@ describe('computeNmdStatus', () => {
 
   it('propose une option de mariage par union, et agrège hasAct sur la première union prouvée', () => {
     const unions = [
-      { id: 'union-1', partner: { firstNames: 'Marie', lastName: 'Martin' } },
-      { id: 'union-2', partner: { firstNames: 'Alice', lastName: 'Durand' } },
+      { id: 'union-1', unionType: 'marriage', partner: { firstNames: 'Marie', lastName: 'Martin' } },
+      { id: 'union-2', unionType: 'marriage', partner: { firstNames: 'Alice', lastName: 'Durand' } },
     ];
     const events = [
       { id: 'ev-m1', origin: 'union', eventType: 'marriage', unionId: 'union-1', proofLevel: 'probable' },
@@ -60,6 +60,23 @@ describe('computeNmdStatus', () => {
     expect(status.marriage.options[1].eventId).toBeNull();
     expect(status.marriage.options[1].hasAct).toBe(false);
     expect(status.marriage.hasAct).toBe(true); // vrai dès qu'une union au moins a un acte validé
+  });
+
+  it('pas de pastille M sans mariage, pas de D si la personne est vivante', () => {
+    const alive = { ...individual, isDeceased: false, deathDate: null };
+    const status = computeNmdStatus({
+      individual: alive,
+      unions: [{ id: 'u-couple', unionType: 'cohabitation', partner: { firstNames: 'Sam', lastName: 'X' } }],
+      events: [],
+      citations: [],
+    });
+    expect(status.applicable).toEqual({ birth: true, marriage: false, death: false });
+  });
+
+  it('D applicable dès que la personne est décédée', () => {
+    const dead = { ...individual, isDeceased: true };
+    const status = computeNmdStatus({ individual: dead, unions: [], events: [], citations: [] });
+    expect(status.applicable.death).toBe(true);
   });
 
   it('ne rattache jamais l\'acte de décès à l\'acte de naissance même si les deux événements existent', () => {

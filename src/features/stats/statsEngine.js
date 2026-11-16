@@ -281,9 +281,11 @@ export function migrationFlows(individuals, placesById, { limit = 15 } = {}) {
 export function completenessCriteria(individual, hasPhoto, nmdStatus) {
   const hasExactBirth = !!(individual.birthDate && individual.birthDatePrecision === 'exact');
   const hasBirthPlace = !!individual.birthPlaceId;
-  const applicableActs = 1 + (individual.isDeceased ? 1 : 0) + (nmdStatus?.marriage.options.length ? 1 : 0);
+  // Seuls les actes applicables comptent (naissance toujours ; mariage s'il existe ; décès si décédé).
+  const applicable = nmdStatus?.applicable || { birth: true, marriage: !!nmdStatus?.marriage.options.length, death: !!individual.isDeceased };
+  const applicableActs = 1 + (applicable.death ? 1 : 0) + (applicable.marriage ? 1 : 0);
   const validatedActs =
-    (nmdStatus?.birth.hasAct ? 1 : 0) + (individual.isDeceased && nmdStatus?.death.hasAct ? 1 : 0) + (nmdStatus?.marriage.hasAct ? 1 : 0);
+    (nmdStatus?.birth.hasAct ? 1 : 0) + (applicable.death && nmdStatus?.death.hasAct ? 1 : 0) + (applicable.marriage && nmdStatus?.marriage.hasAct ? 1 : 0);
   const hasAct = applicableActs > 0 && validatedActs > 0;
   return { hasExactBirth, hasBirthPlace, hasPhoto: !!hasPhoto, hasAct };
 }

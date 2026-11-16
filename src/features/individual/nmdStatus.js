@@ -8,6 +8,11 @@
  * passée déjà chargée.
  */
 
+/** Personne décédée : indicateur de décès ou date de décès (noms de fiche ou de statistiques). */
+function isDeceasedIndividual(ind) {
+  return !!(ind?.isDeceased || ind?.is_deceased || ind?.deathDate || ind?.death_date);
+}
+
 function hasValidatedAct(eventId, citations) {
   if (!eventId) return false;
   return citations.some((c) => c.eventId === eventId && c.hasMedia);
@@ -20,7 +25,10 @@ export function computeNmdStatus({ individual, unions = [], events = [], citatio
     events.filter((e) => e.origin === 'union' && e.eventType === 'marriage').map((e) => [e.unionId, e])
   );
 
-  const marriageOptions = unions.map((u) => {
+  // Seules les unions de type mariage (ou ayant un acte de mariage) concernent la pastille M.
+  const marriageOptions = unions
+    .filter((u) => u.unionType === 'marriage' || marriageEventByUnion.get(u.id))
+    .map((u) => {
     const eventRow = marriageEventByUnion.get(u.id) || null;
     return {
       unionId: u.id,
@@ -34,7 +42,16 @@ export function computeNmdStatus({ individual, unions = [], events = [], citatio
     };
   });
 
+  // Pastilles réellement applicables : M seulement s'il y a un mariage, D seulement
+  // si la personne est décédée. Une personne vivante et non mariée n'a donc que N.
+  const applicable = {
+    birth: true,
+    marriage: marriageOptions.length > 0,
+    death: isDeceasedIndividual(individual),
+  };
+
   return {
+    applicable,
     birth: {
       eventId: birthEvent?.id || null,
       proofLevel: birthEvent?.proofLevel || null,

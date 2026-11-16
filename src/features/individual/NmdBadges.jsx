@@ -47,8 +47,12 @@ export default function NmdBadges({ individual, unions, events, citations, canEd
     <>
       <div className="flex items-center gap-1">
         <Pastille {...LETTERS.birth} active={status.birth.hasAct} onClick={() => handleOpen('birth')} />
-        <Pastille {...LETTERS.marriage} active={status.marriage.hasAct} disabled={status.marriage.options.length === 0} onClick={() => handleOpen('marriage')} />
-        <Pastille {...LETTERS.death} active={status.death.hasAct} onClick={() => handleOpen('death')} />
+        {status.applicable.marriage && (
+          <Pastille {...LETTERS.marriage} active={status.marriage.hasAct} onClick={() => handleOpen('marriage')} />
+        )}
+        {status.applicable.death && (
+          <Pastille {...LETTERS.death} active={status.death.hasAct} onClick={() => handleOpen('death')} />
+        )}
       </div>
 
       {open === 'marriage-choose' && (
