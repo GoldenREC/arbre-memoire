@@ -38,3 +38,14 @@ export function linkPaths(links) {
   }
   return paths;
 }
+
+/**
+ * Apparence d'un lien parental selon la personne survolée : par défaut fin et gris ;
+ * si la personne survolée est l'enfant ou le parent du lien, il prend sa couleur et s'épaissit.
+ */
+export function linkLook(link, focusId, colour) {
+  if (!focusId) return { stroke: '#a3a3a3', strokeWidth: 1, opacity: 1 };
+  const related = link.childId === focusId || link.parentId === focusId;
+  if (related) return { stroke: colour, strokeWidth: 2.5, opacity: 1 };
+  return { stroke: '#a3a3a3', strokeWidth: 1, opacity: 0.25 };
+}

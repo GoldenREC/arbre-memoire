@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useFamilyTree } from './FamilyTreeContext.jsx';
 
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
-import { linkPaths } from './familyBuses.js';
+import { linkLook, linkPaths } from './familyBuses.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
 import TreeLegend from './TreeLegend.jsx';
@@ -15,6 +15,7 @@ import TreeLegend from './TreeLegend.jsx';
  */
 export default function FamilyChartView({ onOpenIndividual }) {
   const { graph, rootId, setRootId, generations, setGenerations, showSiblings, setShowSiblings } = useFamilyTree();
+  const [focusId, setFocusId] = useState(null);
   const layout = useMemo(
     () => buildFamilyLayout(graph, rootId, { up: generations, down: 3, showSiblings }),
     [graph, rootId, generations, showSiblings]
@@ -78,7 +79,8 @@ export default function FamilyChartView({ onOpenIndividual }) {
             })}
             {linkPaths(links).map((p, i) => {
               const style = linkStyle(graph, p.childId, [p.parentId]);
-              return <path key={`l${i}`} d={p.d} fill="none" stroke={style.color} strokeWidth={1.75} strokeDasharray={style.dash} />;
+              const look = linkLook(p, focusId, style.color);
+              return <path key={`l${i}`} d={p.d} fill="none" stroke={look.stroke} strokeWidth={look.strokeWidth} strokeOpacity={look.opacity} strokeDasharray={style.dash} />;
             })}
           </svg>
           {nodes.map((n) => (
@@ -86,11 +88,13 @@ export default function FamilyChartView({ onOpenIndividual }) {
               key={n.id}
               className="group absolute cursor-pointer"
               style={{ left: n.x - CARD_W / 2, top: n.y, width: CARD_W, height: CARD_H }}
+              onMouseEnter={() => setFocusId(n.id)}
+              onMouseLeave={() => setFocusId(null)}
               onDoubleClick={(e) => {
                 if (e.target.closest?.('button')) return;
                 setRootId(n.id);
               }}
-              title="Double-clic : centrer l'arbre sur cette personne"
+              title="Survole une personne pour voir ses liens parentaux, double-clic pour la centrer"
             >
               <div className="absolute -top-6 left-1/2 flex -translate-x-1/2 gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <button
