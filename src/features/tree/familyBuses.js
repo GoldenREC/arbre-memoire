@@ -1,38 +1,40 @@
 /**
- * Regroupe les liens parent → enfant : pour chaque enfant, une barre horizontale
- * où arrivent ses liens parentaux, puis une descente vers l'enfant.
- * Les barres d'enfants situés dans la même gouttière reçoivent chacune leur propre voie,
- * pour qu'une barre ne se confonde jamais avec celle d'un autre enfant.
+ * Tracé des liens parent → enfant, en traits orthogonaux.
+ * Chaque lien est un trait unique, de la couleur de son type : il descend du parent,
+ * file sur sa propre voie horizontale, puis rejoint le haut de l'enfant.
+ * Les voies sont distinctes dans une même gouttière, pour que deux liens ne se confondent jamais.
  */
-const LANE_GAP = 14;
+const LANE_STEP = 9;
+const ARRIVAL_STEP = 10;
 
-export function childBuses(links) {
-  const byChild = new Map();
+export function linkPaths(links) {
+  // Groupes de liens par gouttière (même hauteur de départ/arrivée) : une voie par lien.
+  const byGap = new Map();
   for (const l of links) {
-    if (!byChild.has(l.childId)) byChild.set(l.childId, { childId: l.childId, childX: l.x2, childY: l.y2, drops: [] });
-    byChild.get(l.childId).drops.push({ parentId: l.parentId, x: l.x1, fromY: l.y1 });
+    const key = `${Math.round(l.y1)}-${Math.round(l.y2)}`;
+    if (!byGap.has(key)) byGap.set(key, []);
+    byGap.get(key).push(l);
   }
-  const buses = [...byChild.values()].map((b) => {
-    const parentBottom = Math.max(...b.drops.map((d) => d.fromY));
-    return { ...b, baseY: (parentBottom + b.childY) / 2 };
-  });
-  // Voie par gouttière : les enfants du même niveau reçoivent des voies distinctes, de gauche à droite.
-  const sorted = [...buses].sort((p, q) => p.baseY - q.baseY || p.childX - q.childX);
-  const laneOf = new Map();
-  const rowCount = new Map();
-  for (const b of sorted) {
-    const key = Math.round(b.baseY);
-    const lane = rowCount.get(key) || 0;
-    rowCount.set(key, lane + 1);
-    laneOf.set(b, lane);
+  const paths = [];
+  for (const group of byGap.values()) {
+    group.sort((p, q) => p.x2 - q.x2 || p.x1 - q.x1);
+    // Points d'arrivée : plusieurs parents d'un même enfant arrivent à des endroits différents du haut de la carte.
+    const perChild = new Map();
+    for (const l of group) perChild.set(l.childId, (perChild.get(l.childId) || 0) + 1);
+    const seen = new Map();
+    group.forEach((l, lane) => {
+      const count = perChild.get(l.childId);
+      const k = seen.get(l.childId) || 0;
+      seen.set(l.childId, k + 1);
+      const arrivalX = l.x2 + (k - (count - 1) / 2) * ARRIVAL_STEP;
+      const midY = (l.y1 + l.y2) / 2;
+      const laneY = midY + (lane - (group.length - 1) / 2) * LANE_STEP;
+      paths.push({
+        parentId: l.parentId,
+        childId: l.childId,
+        d: `M ${l.x1} ${l.y1} L ${l.x1} ${laneY} L ${arrivalX} ${laneY} L ${arrivalX} ${l.y2}`,
+      });
+    });
   }
-  return buses.map((b) => {
-    const xs = [...b.drops.map((d) => d.x), b.childX];
-    return {
-      ...b,
-      busY: b.baseY + laneOf.get(b) * LANE_GAP,
-      minX: Math.min(...xs),
-      maxX: Math.max(...xs),
-    };
-  });
+  return paths;
 }

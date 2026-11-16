@@ -3,7 +3,7 @@ import { useFamilyTree } from './FamilyTreeContext.jsx';
 
 import { buildFamilyLayout, CARD_H, CARD_W } from './buildFamilyLayout.js';
 import { linkStyle, unionStyle } from './filiationStyle.js';
-import { childBuses } from './familyBuses.js';
+import { linkPaths } from './familyBuses.js';
 import PersonCard from './PersonCard.jsx';
 import TreeCanvas from './TreeCanvas.jsx';
 import TreeLegend from './TreeLegend.jsx';
@@ -76,25 +76,10 @@ export default function FamilyChartView({ onOpenIndividual }) {
                 />
               );
             })}
-            {childBuses(links).map((bus, i) => (
-              <g key={`b${i}`}>
-                {bus.drops.map((d, j) => {
-                  const style = linkStyle(graph, bus.childId, [d.parentId]);
-                  return (
-                    <path
-                      key={`d${j}`}
-                      d={`M ${d.x} ${d.fromY} L ${d.x} ${bus.busY}`}
-                      fill="none"
-                      stroke={style.color}
-                      strokeWidth={1.75}
-                      strokeDasharray={style.dash}
-                    />
-                  );
-                })}
-                <path d={`M ${bus.minX} ${bus.busY} L ${bus.maxX} ${bus.busY}`} fill="none" stroke="#737373" strokeWidth={1.25} />
-                <path d={`M ${bus.childX} ${bus.busY} L ${bus.childX} ${bus.childY}`} fill="none" stroke="#737373" strokeWidth={1.25} />
-              </g>
-            ))}
+            {linkPaths(links).map((p, i) => {
+              const style = linkStyle(graph, p.childId, [p.parentId]);
+              return <path key={`l${i}`} d={p.d} fill="none" stroke={style.color} strokeWidth={1.75} strokeDasharray={style.dash} />;
+            })}
           </svg>
           {nodes.map((n) => (
             <div
