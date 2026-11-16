@@ -57,12 +57,15 @@ export default function FamilyChartView({ onOpenIndividual }) {
             })}
             {arcs.map((a, i) => {
               const u = unionStyle(a.status, a.unionType);
-              const ym = Math.max(a.ay, a.by) + 34;
-              const mx = (a.ax + a.bx) / 2;
+              // Tracé orthogonal : sort de la carte par le côté, descend sous la rangée, rentre par le côté du conjoint.
+              const sA = a.bx > a.ax ? 1 : -1;
+              const bus = Math.max(a.ay, a.by) + CARD_H / 2 + 22;
+              const x1 = a.ax + sA * 10;
+              const x2 = a.bx - sA * 10;
               return (
                 <path
                   key={`a${i}`}
-                  d={`M ${a.ax} ${a.ay} Q ${mx} ${ym}, ${a.bx} ${a.by}`}
+                  d={`M ${a.ax} ${a.ay} L ${x1} ${a.ay} L ${x1} ${bus} L ${x2} ${bus} L ${x2} ${a.by} L ${a.bx} ${a.by}`}
                   fill="none"
                   stroke={u.color}
                   strokeWidth={2.5}
@@ -114,12 +117,7 @@ export default function FamilyChartView({ onOpenIndividual }) {
                   Fiche
                 </button>
               </div>
-              <PersonCard
-                individual={graph.getIndividual(n.id)}
-                highlighted={n.id === rootId}
-                onCenter={setRootId}
-                onOpen={onOpenIndividual}
-              />
+              <PersonCard individual={graph.getIndividual(n.id)} highlighted={n.id === rootId} />
             </div>
           ))}
         </div>
