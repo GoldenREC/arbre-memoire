@@ -15,6 +15,24 @@ import { supabase } from '../supabaseClient.js';
  * par geocodeAllPendingPlaces() qui espace ses appels.
  */
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+// Base Adresse Nationale (service officiel français, sans clé) : reconnaît les
+// numéros de rue, contrairement à Nominatim qui se perd sur « 46-48 ».
+const BAN_SEARCH_URL = 'https://api-adresse.data.gouv.fr/search/';
+// En dessous de ce score, la BAN propose une rue ou une commune proche plutôt que
+// le numéro demandé : on ne l'utilise pas et on laisse Nominatim prendre le relais.
+export const BAN_MIN_SCORE = 0.6;
+
+/**
+ * Numéros de rue à essayer, dans l'ordre : "46-48" → ["46", "48"], "46 bis" → ["46"],
+ * "12" → ["12"], vide → []. Une plage désigne souvent un même bâtiment : on tente
+ * chaque numéro plutôt que de renoncer.
+ */
+export function streetNumberCandidates(streetNumber) {
+  const m = /^\s*(\d+)(?:\s*(?:-|–|\/|à|au)\s*(\d+))?/i.exec(String(streetNumber || ''));
+  if (!m) return [];
+  return m[2] ? [m[1], m[2]] : [m[1]];
+}
+
 // Renseigne une adresse de contact si tu en as une : Nominatim le demande
 // par politesse pour un usage à plus de quelques requêtes (facultatif).
 const CONTACT_EMAIL = '';
@@ -145,6 +163,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Un seul appel à la BAN : renvoie les coordonnées si le score est suffisant, sinon null. */
+async function geocodeViaBan(query) {
+  const url = new URL(BAN_SEARCH_URL);
+  url.searchParams.set('q', query);
+  url.searchParams.set('limit', '1');
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`BAN a répondu ${res.status}`);
+  const data = await res.json();
+  const feature = data.features?.[0];
+  if (!feature || (feature.properties?.score ?? 0) < BAN_MIN_SCORE) return null;
+  const [longitude, latitude] = feature.geometry?.coordinates || [];
+  if (latitude == null || longitude == null) return null;
+  return { latitude, longitude, displayName: feature.properties?.label || '' };
+}
+
 /** Un seul appel Nominatim — ne pas boucler sans délai (voir geocodeAllPendingPlaces). */
 async function geocodeViaNominatim(query) {
   const url = new URL(NOMINATIM_URL);
@@ -195,6 +228,35 @@ export async function geocodePlace(place, { year, aliases = [] } = {}) {
     const { error } = await supabase.from('places').update(patch).eq('id', place.id);
     if (error) throw error;
     return { ...place, ...patch, source: 'alias' };
+  }
+
+  // Adresse française : la BAN d'abord, essayée pour chaque numéro d'une plage.
+  const inFrance = !place.country || /^france$/i.test(place.country.trim());
+  if (inFrance && place.street_name && place.city) {
+    const numbers = streetNumberCandidates(place.street_number);
+    const rest = [place.postal_code, place.city].filter(Boolean).join(' ');
+    const queries = (numbers.length ? numbers : ['']).map((n) => [n, place.street_name, rest].filter(Boolean).join(' '));
+    for (const query of queries) {
+      try {
+        const result = await geocodeViaBan(query);
+        if (result) {
+          const patch = {
+            latitude: result.latitude,
+            longitude: result.longitude,
+            country: place.country || 'France',
+            region: place.region || null,
+            geocoded_at: new Date().toISOString(),
+            geocode_status: 'ok',
+            geocode_precision: 'street',
+          };
+          const { error } = await supabase.from('places').update(patch).eq('id', place.id);
+          if (error) throw error;
+          return { ...place, ...patch, source: 'ban' };
+        }
+      } catch (err) {
+        console.error(`Géocodage BAN de "${query}" impossible :`, err);
+      }
+    }
   }
 
   const levels = buildGeocodeLevels(place);
