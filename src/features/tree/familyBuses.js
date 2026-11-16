@@ -65,28 +65,41 @@ export function linkPaths(links, graph) {
     if (!byGap.has(it.group)) byGap.set(it.group, []);
     byGap.get(it.group).push(it);
   }
-  const paths = [];
+  // Hauteur souhaitée de chaque voie, dans sa gouttière.
+  const wanted = [];
   for (const group of byGap.values()) {
     group.sort((a, b) => a.x2 - b.x2 || a.x1 - b.x1);
     group.forEach((it, lane) => {
       const midY = (it.y1 + it.y2) / 2;
-      const laneY = midY + (lane - (group.length - 1) / 2) * LANE_STEP;
-      if (it.kind === 'trunk') {
-        const { p, q } = it;
-        paths.push({
-          parentId: it.parentId,
-          childId: it.childId,
-          parentIds: it.parentIds,
-          d: `M ${p.x1} ${p.y1} L ${p.x1} ${it.yBar} L ${q.x1} ${it.yBar} L ${q.x1} ${q.y1} M ${it.x1} ${it.yBar} L ${it.x1} ${laneY} L ${it.arrivalX} ${laneY} L ${it.arrivalX} ${it.y2}`,
-        });
-      } else {
-        paths.push({
-          parentId: it.parentId,
-          childId: it.childId,
-          d: `M ${it.x1} ${it.y1} L ${it.x1} ${laneY} L ${it.arrivalX} ${laneY} L ${it.arrivalX} ${it.y2}`,
-        });
-      }
+      wanted.push({ it, y: midY + (lane - (group.length - 1) / 2) * LANE_STEP });
     });
+  }
+  // Séparation globale : deux horizontales, même issues de gouttières différentes,
+  // ne peuvent pas être plus proches que LANE_STEP.
+  wanted.sort((a, b) => a.y - b.y || a.it.x1 - b.it.x1);
+  let prev = -Infinity;
+  for (const w of wanted) {
+    w.y = Math.max(w.y, prev + LANE_STEP);
+    prev = w.y;
+  }
+
+  const paths = [];
+  for (const { it, y: laneY } of wanted) {
+    if (it.kind === 'trunk') {
+      const { p, q } = it;
+      paths.push({
+        parentId: it.parentId,
+        childId: it.childId,
+        parentIds: it.parentIds,
+        d: `M ${p.x1} ${p.y1} L ${p.x1} ${it.yBar} L ${q.x1} ${it.yBar} L ${q.x1} ${q.y1} M ${it.x1} ${it.yBar} L ${it.x1} ${laneY} L ${it.arrivalX} ${laneY} L ${it.arrivalX} ${it.y2}`,
+      });
+    } else {
+      paths.push({
+        parentId: it.parentId,
+        childId: it.childId,
+        d: `M ${it.x1} ${it.y1} L ${it.x1} ${laneY} L ${it.arrivalX} ${laneY} L ${it.arrivalX} ${it.y2}`,
+      });
+    }
   }
   return paths;
 }
